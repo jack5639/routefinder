@@ -1,1 +1,9 @@
-export { compareRouteScores, rankRoutes, scoreRoute } from "./scoring";
+export {
+  buildSimulatorComparison,
+  buildDecisionBoard,
+  classifyScoredRoute,
+  compareRouteScores,
+  decisionBoardCategoryDefinitions,
+  rankRoutes,
+  scoreRoute,
+} from "./scoring";

@@ -76,6 +76,23 @@ export interface ScoredRoute extends RouteOption {
   };
 }
 
+export type DecisionBoardCategoryId =
+  | "strong-fit"
+  | "realistic"
+  | "stretch"
+  | "safer-backup"
+  | "worth-exploring";
+
+export interface DecisionBoardCategoryDefinition {
+  id: DecisionBoardCategoryId;
+  title: string;
+  summary: string;
+}
+
+export interface DecisionBoardGroup extends DecisionBoardCategoryDefinition {
+  routes: ScoredRoute[];
+}
+
 export interface RoadmapStep {
   title: string;
   timeframe: string;
@@ -89,8 +106,26 @@ export interface RoadmapTemplate {
   steps: RoadmapStep[];
 }
 
+export interface SavedRoadmap {
+  routeId: string;
+  savedAt: string;
+}
+
+export type SimulatorMovementLabel = "improved" | "worsened" | "appeared" | "disappeared" | "steady";
+
 export interface SimulatorChange {
   routeId: string;
-  label: "improved" | "worsened" | "appeared" | "disappeared" | "steady";
+  label: SimulatorMovementLabel;
   delta: number;
+  baselineScore: number | null;
+  changedScore: number | null;
+  baselineRank: number | null;
+  changedRank: number | null;
+  explanations: string[];
+}
+
+export interface SimulatorComparison {
+  baselineRoutes: ScoredRoute[];
+  changedRoutes: ScoredRoute[];
+  changes: SimulatorChange[];
 }

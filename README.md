@@ -8,6 +8,7 @@ A mobile-first MVP prototype for helping 16-19-year-olds compare education, appr
 - Route-builder quiz placeholder at `/quiz`
 - Mock recommendation results at `/results`
 - Route roadmaps at `/roadmap/[routeId]`
+- One saved local roadmap at `/saved-roadmap`
 - Basic what-if simulator at `/simulator`
 - Pure deterministic scoring logic in `src/lib/scoring`
 - Mock route data in `src/data/routes`
