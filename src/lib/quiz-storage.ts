@@ -2,6 +2,7 @@ import type { CurrentStage, DebtPreference, GradeBand, QuizAnswers, WorkStyle } 
 
 export const QUIZ_ANSWERS_STORAGE_KEY = "routefinder.quizAnswers.v1";
 export const QUIZ_ANSWERS_CHANGED_EVENT = "routefinder:quiz-answers-changed";
+export const QUIZ_PROGRESS_STEP_STORAGE_KEY = "routefinder.quizStep.v1";
 
 const currentStages: readonly CurrentStage[] = ["GCSE", "Year 12", "Year 13", "College", "Gap year", "Working"];
 const gradeBands: readonly GradeBand[] = ["needs-building", "steady", "strong", "high"];
@@ -84,5 +85,37 @@ export function loadQuizAnswers(): QuizAnswers | null {
 
 export function saveQuizAnswers(answers: QuizAnswers) {
   window.localStorage.setItem(QUIZ_ANSWERS_STORAGE_KEY, JSON.stringify(answers));
+  window.dispatchEvent(new Event(QUIZ_ANSWERS_CHANGED_EVENT));
+}
+
+export function loadQuizProgressStep(maxStep: number) {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const stored = Number(window.localStorage.getItem(QUIZ_PROGRESS_STEP_STORAGE_KEY));
+
+  if (!Number.isInteger(stored) || stored < 0 || stored > maxStep) {
+    return null;
+  }
+
+  return stored;
+}
+
+export function saveQuizProgressStep(step: number) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(QUIZ_PROGRESS_STEP_STORAGE_KEY, String(step));
+}
+
+export function clearQuizAnswers() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(QUIZ_ANSWERS_STORAGE_KEY);
+  window.localStorage.removeItem(QUIZ_PROGRESS_STEP_STORAGE_KEY);
   window.dispatchEvent(new Event(QUIZ_ANSWERS_CHANGED_EVENT));
 }
