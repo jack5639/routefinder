@@ -1,0 +1,101 @@
+# MVP Spec: Future Route Planner
+
+## Product summary
+
+A mobile-first web app for 16–19-year-olds deciding between university, apprenticeships, college/foundation routes, and work-based routes.
+
+The product helps users compare realistic routes based on:
+- current stage
+- subjects
+- predicted grades
+- interests
+- target career or target course
+- location
+- travel distance
+- debt tolerance
+- desire to earn soon
+- work style preferences
+- constraints
+
+The app must not present recommendations as certain or final. It should explain trade-offs and show confidence levels.
+
+## User segments
+
+A: Completely unsure  
+B: Has vague interests  
+C: Has target career but does not know best route  
+D: Has target course but does not know best university/provider  
+E: Has constraints such as low grades, debt concerns, location limits, money pressure  
+
+## MVP features
+
+1. Landing page
+2. Route-builder quiz
+3. Recommendation results
+4. Route scoring engine
+5. Roadmap generator
+6. What-if simulator
+7. Save one roadmap locally or to a user account
+8. Shareable parent summary
+
+## Recommendation principles
+
+Each recommendation must include:
+- route title
+- route type
+- fit score
+- feasibility score
+- constraint score
+- confidence score
+- why this route fits
+- risks/watch-outs
+- next steps
+- backup options
+
+Never say:
+- “This is the best route”
+- “You should do this”
+- “You are not smart enough”
+- “You cannot do this”
+
+Use:
+- “This route currently looks strong because…”
+- “This may be harder because…”
+- “You could improve your chances by…”
+- “Alternative routes include…”
+
+## MVP route types
+
+- University degree
+- Degree apprenticeship
+- Higher apprenticeship
+- College course
+- Foundation year
+- Access course
+- Direct work/training
+- Portfolio/project route
+
+## What-if simulator
+
+The user can change:
+- predicted grades
+- travel distance
+- debt preference
+- target career
+- target course
+- desire to earn soon
+
+The app should show what options improve, worsen, appear, or disappear.
+
+## Definition of done
+
+The MVP is done when:
+- a user can complete the quiz on mobile
+- the app returns 3–5 ranked options
+- every option has an explanation and confidence score
+- the user can select one route and get a roadmap
+- the user can change grades/distance/debt preference in the simulator
+- the route scores update
+- the app includes at least 10 test personas
+- scoring logic has unit tests
+- the app can be deployed
