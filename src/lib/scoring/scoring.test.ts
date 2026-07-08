@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { mockRoutes } from "@/data/routes/mock-routes";
 import { testPersonas } from "@/data/test-personas/personas";
-import { buildDecisionBoard, buildSimulatorComparison, compareRouteScores, rankRoutes, scoreRoute } from "./scoring";
+import type { QuizAnswers } from "@/types";
+import {
+  applySingleSimulatorChange,
+  buildDecisionBoard,
+  buildSimulatorComparison,
+  compareRouteScores,
+  countSimulatorChangedFactors,
+  rankRoutes,
+  scoreRoute,
+} from "./scoring";
 
 describe("scoring", () => {
   it("returns ranked routes with explainable scores", () => {
@@ -54,6 +63,26 @@ describe("scoring", () => {
 
     expect(changes.length).toBeGreaterThan(0);
     expect(changes.some((change) => change.label !== "steady")).toBe(true);
+  });
+
+  it("builds one-change-at-a-time simulator scenarios", () => {
+    const baseline = testPersonas[0];
+    const changed = applySingleSimulatorChange(baseline, "travel", {
+      maxTravelMinutes: 120,
+      predictedGrades: "high",
+      debtPreference: "open",
+    });
+
+    expect(changed.maxTravelMinutes).toBe(120);
+    expect(changed.predictedGrades).toBe(baseline.predictedGrades);
+    expect(changed.debtPreference).toBe(baseline.debtPreference);
+    expect(countSimulatorChangedFactors(baseline, changed)).toBe(1);
+
+    const comparison = buildSimulatorComparison(mockRoutes, baseline, changed);
+
+    expect(comparison.baselineRoutes).toHaveLength(5);
+    expect(comparison.changedRoutes).toHaveLength(5);
+    expect(comparison.changes.length).toBeGreaterThan(0);
   });
 
   it("labels simulator appearances and disappearances from the visible top routes", () => {
@@ -113,6 +142,44 @@ describe("scoring", () => {
     expect(groupedRoutes).toHaveLength(mockRoutes.length);
     expect(groupedIds.size).toBe(mockRoutes.length);
     expect(board.find((group) => group.id === "strong-fit")?.routes[0]?.id).toBe("software-degree-apprenticeship");
+  });
+
+  it("always places at least one route in Strong fit for a completed quiz profile", () => {
+    const cautiousProfile: QuizAnswers = {
+      currentStage: "Year 12",
+      subjects: ["english"],
+      predictedGrades: "needs-building",
+      interests: ["outdoors"],
+      location: "Local area",
+      maxTravelMinutes: 10,
+      debtPreference: "avoid",
+      earnSoon: 1,
+      workStyles: ["academic"],
+      constraints: ["location limit"],
+    };
+    const board = buildDecisionBoard(mockRoutes, cautiousProfile);
+    const strongFitRoutes = board.find((group) => group.id === "strong-fit")?.routes ?? [];
+    const groupedRouteIds = board.flatMap((group) => group.routes.map((route) => route.id));
+
+    expect(strongFitRoutes.length).toBeGreaterThanOrEqual(1);
+    expect(new Set(groupedRouteIds).size).toBe(groupedRouteIds.length);
+  });
+
+  it("keeps decision board routes unique across categories", () => {
+    const board = buildDecisionBoard(mockRoutes, testPersonas[2]);
+    const routeIds = board.flatMap((group) => group.routes.map((route) => route.id));
+
+    expect(new Set(routeIds).size).toBe(routeIds.length);
+    expect(routeIds.sort()).toEqual(mockRoutes.map((route) => route.id).sort());
+  });
+
+  it("keeps demo route data ready for future source-backed records", () => {
+    for (const route of mockRoutes) {
+      expect(route.evidenceLevel).toBe("demo");
+      expect(route.lastChecked).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(route.costOrPaySummary).toBeTruthy();
+      expect(route.bursaryOrSupportSummary).toBeTruthy();
+    }
   });
 
   it("includes at least 10 test personas", () => {

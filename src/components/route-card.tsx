@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { RouteDataPanel } from "@/components/route-data-panel";
 import type { ScoredRoute } from "@/types";
 
 function ScorePill({ label, value }: { label: string; value: number }) {
@@ -82,6 +83,10 @@ export function RouteCard({ route }: { route: ScoredRoute }) {
             ))}
           </div>
         ) : null}
+
+        <div className="mt-5">
+          <RouteDataPanel route={route} compact />
+        </div>
 
         <Link
           href={`/roadmap/${route.id}`}

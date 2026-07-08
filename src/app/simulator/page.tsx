@@ -1,31 +1,71 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { type KeyboardEvent, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { ScoreBar } from "@/components/score-bar";
 import { mockRoutes } from "@/data/routes/mock-routes";
-import { buildSimulatorComparison } from "@/lib/scoring";
+import { applySingleSimulatorChange, buildSimulatorComparison, countSimulatorChangedFactors } from "@/lib/scoring";
 import { useSavedQuizAnswers } from "@/lib/use-saved-quiz-answers";
-import type { DebtPreference, GradeBand, QuizAnswers, ScoredRoute, SimulatorChange, SimulatorMovementLabel } from "@/types";
+import type {
+  DebtPreference,
+  GradeBand,
+  QuizAnswers,
+  ScoredRoute,
+  SimulatorChange,
+  SimulatorFactor,
+  SimulatorFactorPatch,
+  SimulatorMovementLabel,
+  WorkStyle,
+} from "@/types";
 
 type Option<T extends string> = {
   value: T;
   label: string;
-  hint: string;
+  hint?: string;
 };
 
+const factorOptions: Option<SimulatorFactor>[] = [
+  { value: "grades", label: "Grades", hint: "Test a different predicted grade band" },
+  { value: "travel", label: "Travel or move", hint: "Test a wider or tighter distance" },
+  { value: "debt", label: "Debt preference", hint: "Test how cost comfort changes scores" },
+  { value: "target", label: "Target idea", hint: "Test a career or course idea" },
+  { value: "interests", label: "Interests", hint: "Test a different interest mix" },
+  { value: "day-to-day", label: "Day to day", hint: "Test working style and earning pace" },
+];
+
 const gradeOptions: Option<GradeBand>[] = [
-  { value: "needs-building", label: "Building up", hint: "Some grades may need support" },
-  { value: "steady", label: "Steady", hint: "Mostly on track" },
-  { value: "strong", label: "Strong", hint: "Competitive for many routes" },
-  { value: "high", label: "High", hint: "High academic attainment" },
+  { value: "needs-building", label: "Building up" },
+  { value: "steady", label: "Steady" },
+  { value: "strong", label: "Strong" },
+  { value: "high", label: "High" },
 ];
 
 const debtOptions: Option<DebtPreference>[] = [
-  { value: "open", label: "Open", hint: "Costs matter, but are not a blocker" },
-  { value: "some-concern", label: "Some concern", hint: "Cost clarity should carry weight" },
-  { value: "avoid", label: "Prefer to avoid", hint: "Lower-debt routes get extra weight" },
+  { value: "open", label: "Open to costs" },
+  { value: "some-concern", label: "Cost-aware" },
+  { value: "avoid", label: "Prefer lower debt" },
+];
+
+const interestOptions: Option<string>[] = [
+  { value: "technology", label: "Technology" },
+  { value: "problem solving", label: "Problem solving" },
+  { value: "health", label: "Health" },
+  { value: "people", label: "Helping people" },
+  { value: "business", label: "Business" },
+  { value: "design", label: "Design" },
+  { value: "engineering", label: "Engineering" },
+  { value: "gaming", label: "Games" },
+  { value: "community", label: "Community" },
+  { value: "writing", label: "Writing" },
+];
+
+const workStyleOptions: Option<WorkStyle>[] = [
+  { value: "academic", label: "Ideas and study" },
+  { value: "practical", label: "Hands-on" },
+  { value: "creative", label: "Creative" },
+  { value: "people", label: "People-focused" },
+  { value: "technical", label: "Technical" },
 ];
 
 const gradeLabels: Record<GradeBand, string> = {
@@ -36,9 +76,9 @@ const gradeLabels: Record<GradeBand, string> = {
 };
 
 const debtLabels: Record<DebtPreference, string> = {
-  open: "open",
-  "some-concern": "some concern",
-  avoid: "prefer to avoid",
+  open: "open to costs",
+  "some-concern": "cost-aware",
+  avoid: "prefers lower debt",
 };
 
 const movementStyles: Record<SimulatorMovementLabel, { badge: string; ring: string; text: string }> = {
@@ -77,15 +117,32 @@ function clampNumber(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, Math.round(value)));
 }
 
-function countScenarioChanges(baseline: QuizAnswers, scenario: QuizAnswers) {
-  return [
-    baseline.predictedGrades !== scenario.predictedGrades,
-    baseline.maxTravelMinutes !== scenario.maxTravelMinutes,
-    baseline.debtPreference !== scenario.debtPreference,
-    (baseline.targetCareer ?? "") !== (scenario.targetCareer ?? ""),
-    (baseline.targetCourse ?? "") !== (scenario.targetCourse ?? ""),
-    baseline.earnSoon !== scenario.earnSoon,
-  ].filter(Boolean).length;
+function cleanList(values: string[]) {
+  const seen = new Set<string>();
+  const cleanValues: string[] = [];
+
+  values.forEach((value) => {
+    const cleanValue = value.trim().replace(/\s+/g, " ");
+    const key = cleanValue.toLowerCase();
+
+    if (cleanValue && !seen.has(key)) {
+      seen.add(key);
+      cleanValues.push(cleanValue);
+    }
+  });
+
+  return cleanValues;
+}
+
+function splitManualItems(value: string) {
+  return value
+    .split(",")
+    .map((item) => item.trim().replace(/\s+/g, " "))
+    .filter(Boolean);
+}
+
+function toggleValue<T extends string>(values: T[], value: T) {
+  return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
 }
 
 function formatDelta(delta: number) {
@@ -96,8 +153,17 @@ function formatDelta(delta: number) {
   return `${delta}`;
 }
 
-function OptionalValue({ value, fallback }: { value?: string; fallback: string }) {
-  return <span>{value?.trim() ? value : fallback}</span>;
+function joinItems(items: string[], fallback: string) {
+  const cleanItems = cleanList(items);
+  return cleanItems.length ? cleanItems.join(", ") : fallback;
+}
+
+function chipButtonClass(selected: boolean) {
+  return `min-h-12 rounded-lg border-2 px-4 py-3 text-left text-sm font-black leading-5 transition active:translate-y-0.5 ${
+    selected
+      ? "border-leaf bg-ink text-white shadow-soft"
+      : "border-ink/10 bg-white text-ink hover:border-leaf/50 hover:bg-mint/45"
+  }`;
 }
 
 function EmptySimulatorAnswers() {
@@ -107,8 +173,8 @@ function EmptySimulatorAnswers() {
         <p className="text-sm font-black uppercase tracking-wide text-leaf">What-if simulator</p>
         <h1 className="mt-3 text-3xl font-black leading-tight text-ink sm:text-5xl">Start with your saved quiz answers.</h1>
         <p className="mt-3 text-base leading-7 text-ink/75">
-          The simulator needs a baseline from the quiz saved on this device. Once you have answers saved, you can test grades,
-          travel, cost preference, targets, and earning pace without changing the original quiz.
+          The simulator needs a baseline from the quiz saved on this device. Once answers are saved, it can test one change at a
+          time without changing the original quiz.
         </p>
         <Link
           href="/quiz"
@@ -121,109 +187,170 @@ function EmptySimulatorAnswers() {
   );
 }
 
-function BaselineSummary({ answers }: { answers: QuizAnswers }) {
-  const items = [
-    ["Grades", gradeLabels[answers.predictedGrades]],
-    ["Travel", `up to ${answers.maxTravelMinutes} min`],
-    ["Debt", debtLabels[answers.debtPreference]],
-    ["Career", answers.targetCareer || "not set"],
-    ["Course", answers.targetCourse || "not set"],
-    ["Earn soon", `${answers.earnSoon} out of 5`],
-  ];
-
-  return (
-    <section className="rounded-lg border border-ink/10 bg-white p-4 shadow-soft">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-black uppercase tracking-wide text-leaf">Saved baseline</p>
-          <h2 className="mt-1 text-xl font-black text-ink">Your quiz answers stay unchanged.</h2>
-        </div>
-        <Link
-          href="/quiz"
-          className="shrink-0 rounded-full border border-ink/15 px-3 py-2 text-xs font-black text-ink transition hover:bg-mint"
-        >
-          Edit quiz
-        </Link>
-      </div>
-
-      <div className="mt-4 grid gap-2 sm:grid-cols-2">
-        {items.map(([label, value]) => (
-          <div key={label} className="rounded-lg bg-oat px-3 py-2">
-            <p className="text-[0.65rem] font-black uppercase tracking-wide text-ink/45">{label}</p>
-            <p className="mt-1 text-sm font-black text-ink">{value}</p>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function OptionButtons<T extends string>({
-  label,
-  options,
-  value,
-  onChange,
+function FactorPicker({
+  selectedFactor,
+  onSelect,
 }: {
-  label: string;
-  options: Option<T>[];
-  value: T;
-  onChange: (value: T) => void;
+  selectedFactor: SimulatorFactor;
+  onSelect: (factor: SimulatorFactor) => void;
 }) {
   return (
-    <div>
-      <p className="text-sm font-black text-ink">{label}</p>
-      <div className="mt-3 grid gap-2">
-        {options.map((option) => {
-          const selected = option.value === value;
+    <section className="rounded-lg border border-ink/10 bg-white p-4 shadow-soft">
+      <p className="text-xs font-black uppercase tracking-wide text-leaf">Choose one factor</p>
+      <h2 className="mt-1 text-xl font-black text-ink">Only this factor changes in the comparison.</h2>
+      <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {factorOptions.map((option) => {
+          const selected = option.value === selectedFactor;
 
           return (
             <button
               key={option.value}
               type="button"
               aria-pressed={selected}
-              onClick={() => onChange(option.value)}
-              className={`rounded-lg border-2 px-4 py-3 text-left transition ${
-                selected
-                  ? "border-leaf bg-mint shadow-soft"
-                  : "border-ink/10 bg-white hover:border-leaf/40 hover:bg-mint/40"
-              }`}
+              onClick={() => onSelect(option.value)}
+              className={chipButtonClass(selected)}
             >
-              <span className="block text-base font-black text-ink">{option.label}</span>
-              <span className="mt-1 block text-sm font-semibold leading-5 text-ink/60">{option.hint}</span>
+              <span className="block">{option.label}</span>
+              {option.hint ? (
+                <span className={`mt-1 block text-xs font-semibold leading-5 ${selected ? "text-white/75" : "text-ink/60"}`}>
+                  {option.hint}
+                </span>
+              ) : null}
             </button>
           );
         })}
       </div>
+    </section>
+  );
+}
+
+function BaselineNotice({ answers, changedCount }: { answers: QuizAnswers; changedCount: number }) {
+  return (
+    <section className="rounded-lg border border-ink/10 bg-mint p-4 shadow-soft">
+      <p className="text-xs font-black uppercase tracking-wide text-leaf">Saved baseline stays put</p>
+      <h2 className="mt-1 text-xl font-black text-ink">Your saved quiz answers are not changed here.</h2>
+      <p className="mt-2 text-sm font-semibold leading-6 text-ink/70">
+        Go back to the quiz to edit the saved version. This page only builds a temporary comparison from one selected factor.
+      </p>
+      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+        <div className="rounded-lg bg-white/85 px-3 py-2">
+          <p className="text-[0.65rem] font-black uppercase tracking-wide text-ink/45">Grades</p>
+          <p className="mt-1 text-sm font-black text-ink">{gradeLabels[answers.predictedGrades]}</p>
+        </div>
+        <div className="rounded-lg bg-white/85 px-3 py-2">
+          <p className="text-[0.65rem] font-black uppercase tracking-wide text-ink/45">Travel</p>
+          <p className="mt-1 text-sm font-black text-ink">up to {answers.maxTravelMinutes} min</p>
+        </div>
+        <div className="rounded-lg bg-white/85 px-3 py-2">
+          <p className="text-[0.65rem] font-black uppercase tracking-wide text-ink/45">Temporary factors changed</p>
+          <p className="mt-1 text-sm font-black text-ink">{changedCount} of 1</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function OptionButtons<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: Option<T>[];
+  value: T;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {options.map((option) => {
+        const selected = option.value === value;
+
+        return (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={selected}
+            onClick={() => onChange(option.value)}
+            className={`min-h-14 rounded-lg border-2 px-4 py-3 text-left font-black transition ${
+              selected
+                ? "border-leaf bg-mint shadow-soft"
+                : "border-ink/10 bg-white hover:border-leaf/40 hover:bg-mint/40"
+            }`}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function MultiChipGrid<T extends string>({
+  options,
+  selectedValues,
+  onToggle,
+}: {
+  options: Option<T>[];
+  selectedValues: T[];
+  onToggle: (value: T) => void;
+}) {
+  return (
+    <div className="grid gap-2 sm:grid-cols-2">
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          aria-pressed={selectedValues.includes(option.value)}
+          onClick={() => onToggle(option.value)}
+          className={chipButtonClass(selectedValues.includes(option.value))}
+        >
+          {option.label}
+        </button>
+      ))}
     </div>
   );
 }
 
 function ScenarioControls({
-  baseline,
+  selectedFactor,
   scenario,
-  onChange,
+  updatePatch,
   onReset,
 }: {
-  baseline: QuizAnswers;
+  selectedFactor: SimulatorFactor;
   scenario: QuizAnswers;
-  onChange: (update: Partial<QuizAnswers>) => void;
+  updatePatch: (patch: SimulatorFactorPatch) => void;
   onReset: () => void;
 }) {
-  const changedCount = countScenarioChanges(baseline, scenario);
-  const progress = Math.round((changedCount / 6) * 100);
+  const [interestDraft, setInterestDraft] = useState("");
 
-  function updateScenario(update: Partial<QuizAnswers>) {
-    onChange(update);
+  function addInterestDraft() {
+    const additions = splitManualItems(interestDraft);
+
+    if (!additions.length) {
+      return;
+    }
+
+    updatePatch({ interests: cleanList([...scenario.interests, ...additions]) });
+    setInterestDraft("");
+  }
+
+  function handleInterestDraftKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== "Enter") {
+      return;
+    }
+
+    event.preventDefault();
+    addInterestDraft();
   }
 
   return (
     <section className="rounded-lg border border-ink/10 bg-white p-4 shadow-soft">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-xs font-black uppercase tracking-wide text-leaf">Changed scenario</p>
-          <h2 className="mt-1 text-xl font-black text-ink">Try a route shift.</h2>
-          <p className="mt-2 text-sm leading-6 text-ink/70">
-            These controls recalculate the comparison only on this page. They are planning prompts, not predictions.
+          <p className="text-xs font-black uppercase tracking-wide text-leaf">Temporary change</p>
+          <h2 className="mt-1 text-xl font-black text-ink">{factorOptions.find((item) => item.value === selectedFactor)?.label}</h2>
+          <p className="mt-2 text-sm font-semibold leading-6 text-ink/70">
+            Change this one factor, then compare the baseline and changed route scores below.
           </p>
         </div>
         <button
@@ -231,100 +358,176 @@ function ScenarioControls({
           onClick={onReset}
           className="inline-flex min-h-11 items-center justify-center rounded-full border border-ink/15 bg-white px-4 py-2 text-sm font-black text-ink transition hover:bg-mint"
         >
-          Reset
+          Reset change
         </button>
       </div>
 
-      <div className="mt-4 rounded-lg bg-oat p-3">
-        <div className="flex items-center justify-between gap-3 text-xs font-black uppercase tracking-wide text-ink/55">
-          <span>Scenario changes</span>
-          <span>
-            {changedCount} of 6
-          </span>
-        </div>
-        <div className="mt-2 h-3 overflow-hidden rounded-full bg-white">
-          <div className="h-full rounded-full bg-leaf transition-all" style={{ width: `${progress}%` }} />
-        </div>
+      <div className="mt-5">
+        {selectedFactor === "grades" ? (
+          <OptionButtons
+            options={gradeOptions}
+            value={scenario.predictedGrades}
+            onChange={(predictedGrades) => updatePatch({ predictedGrades })}
+          />
+        ) : null}
+
+        {selectedFactor === "travel" ? (
+          <label className="block text-sm font-black text-ink">
+            Travel or move distance
+            <span className="mt-2 flex items-center justify-between rounded-lg border-2 border-ink/10 bg-oat px-4 py-3">
+              <span className="text-3xl font-black text-ink">{scenario.maxTravelMinutes}</span>
+              <span className="text-xs font-black uppercase tracking-wide text-ink/45">minutes</span>
+            </span>
+            <input
+              type="range"
+              min={10}
+              max={180}
+              step={5}
+              value={scenario.maxTravelMinutes}
+              onChange={(event) => updatePatch({ maxTravelMinutes: Number(event.target.value) })}
+              className="mt-4 w-full accent-leaf"
+            />
+            <input
+              type="number"
+              min={10}
+              max={180}
+              step={5}
+              value={scenario.maxTravelMinutes}
+              onChange={(event) => updatePatch({ maxTravelMinutes: clampNumber(Number(event.target.value), 10, 180) })}
+              className="mt-3 w-full rounded-lg border-2 border-ink/10 bg-white px-4 py-3 text-base font-semibold text-ink outline-none transition focus:border-leaf"
+            />
+          </label>
+        ) : null}
+
+        {selectedFactor === "debt" ? (
+          <OptionButtons
+            options={debtOptions}
+            value={scenario.debtPreference}
+            onChange={(debtPreference) => updatePatch({ debtPreference })}
+          />
+        ) : null}
+
+        {selectedFactor === "target" ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="text-sm font-black text-ink">
+              Career idea
+              <input
+                value={scenario.targetCareer ?? ""}
+                onChange={(event) => updatePatch({ targetCareer: event.target.value })}
+                placeholder="e.g. software developer"
+                className="mt-2 w-full rounded-lg border-2 border-ink/10 bg-white px-4 py-3 text-base font-semibold text-ink outline-none transition focus:border-leaf"
+              />
+            </label>
+            <label className="text-sm font-black text-ink">
+              Course or study idea
+              <input
+                value={scenario.targetCourse ?? ""}
+                onChange={(event) => updatePatch({ targetCourse: event.target.value })}
+                placeholder="e.g. computer science"
+                className="mt-2 w-full rounded-lg border-2 border-ink/10 bg-white px-4 py-3 text-base font-semibold text-ink outline-none transition focus:border-leaf"
+              />
+            </label>
+          </div>
+        ) : null}
+
+        {selectedFactor === "interests" ? (
+          <div className="space-y-4">
+            <MultiChipGrid
+              options={interestOptions}
+              selectedValues={scenario.interests}
+              onToggle={(interest) => updatePatch({ interests: toggleValue(scenario.interests, interest) })}
+            />
+            <div className="rounded-lg border border-ink/10 bg-oat p-3">
+              <label className="block text-sm font-black text-ink" htmlFor="interest-draft">
+                Add a different interest
+              </label>
+              <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
+                <input
+                  id="interest-draft"
+                  value={interestDraft}
+                  onChange={(event) => setInterestDraft(event.target.value)}
+                  onKeyDown={handleInterestDraftKeyDown}
+                  placeholder="e.g. sport, music, fixing things"
+                  className="min-h-[3.25rem] w-full rounded-lg border-2 border-ink/10 bg-white px-4 py-3 text-base font-semibold text-ink outline-none transition focus:border-leaf"
+                />
+                <button
+                  type="button"
+                  onClick={addInterestDraft}
+                  className="min-h-[3.25rem] rounded-lg bg-ink px-4 py-3 text-sm font-black text-white transition hover:bg-leaf"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {selectedFactor === "day-to-day" ? (
+          <div className="space-y-5">
+            <MultiChipGrid
+              options={workStyleOptions}
+              selectedValues={scenario.workStyles}
+              onToggle={(workStyle) => updatePatch({ workStyles: toggleValue(scenario.workStyles, workStyle) })}
+            />
+            <label className="block text-sm font-black text-ink">
+              Earning soon
+              <span className="mt-2 flex items-center justify-between rounded-lg border-2 border-ink/10 bg-oat px-4 py-3">
+                <span className="text-3xl font-black text-ink">{scenario.earnSoon}</span>
+                <span className="text-xs font-black uppercase tracking-wide text-ink/45">out of 5</span>
+              </span>
+              <input
+                type="range"
+                min={1}
+                max={5}
+                step={1}
+                value={scenario.earnSoon}
+                onChange={(event) => updatePatch({ earnSoon: Number(event.target.value) })}
+                className="mt-4 w-full accent-leaf"
+              />
+            </label>
+          </div>
+        ) : null}
       </div>
+    </section>
+  );
+}
 
-      <div className="mt-5 grid gap-6">
-        <OptionButtons
-          label="Predicted grades"
-          options={gradeOptions}
-          value={scenario.predictedGrades}
-          onChange={(predictedGrades) => updateScenario({ predictedGrades })}
-        />
-
-        <label className="block text-sm font-black text-ink">
-          Maximum travel time
-          <span className="mt-2 flex items-center justify-between rounded-lg border-2 border-ink/10 bg-oat px-4 py-3">
-            <span className="text-3xl font-black text-ink">{scenario.maxTravelMinutes}</span>
-            <span className="text-xs font-black uppercase tracking-wide text-ink/45">minutes</span>
-          </span>
-          <input
-            type="range"
-            min={10}
-            max={180}
-            step={5}
-            value={scenario.maxTravelMinutes}
-            onChange={(event) => updateScenario({ maxTravelMinutes: Number(event.target.value) })}
-            className="mt-4 w-full accent-leaf"
-          />
-          <input
-            type="number"
-            min={10}
-            max={180}
-            step={5}
-            value={scenario.maxTravelMinutes}
-            onChange={(event) => updateScenario({ maxTravelMinutes: clampNumber(Number(event.target.value), 10, 180) })}
-            className="mt-3 w-full rounded-lg border-2 border-ink/10 bg-white px-4 py-3 text-base font-semibold text-ink outline-none transition focus:border-leaf"
-          />
-        </label>
-
-        <OptionButtons
-          label="Debt preference"
-          options={debtOptions}
-          value={scenario.debtPreference}
-          onChange={(debtPreference) => updateScenario({ debtPreference })}
-        />
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="text-sm font-black text-ink">
-            Target career
-            <input
-              value={scenario.targetCareer ?? ""}
-              onChange={(event) => updateScenario({ targetCareer: event.target.value })}
-              placeholder="e.g. software developer"
-              className="mt-2 w-full rounded-lg border-2 border-ink/10 bg-white px-4 py-3 text-base font-semibold text-ink outline-none transition focus:border-leaf"
-            />
-          </label>
-          <label className="text-sm font-black text-ink">
-            Target course
-            <input
-              value={scenario.targetCourse ?? ""}
-              onChange={(event) => updateScenario({ targetCourse: event.target.value })}
-              placeholder="e.g. computer science"
-              className="mt-2 w-full rounded-lg border-2 border-ink/10 bg-white px-4 py-3 text-base font-semibold text-ink outline-none transition focus:border-leaf"
-            />
-          </label>
+function ScenarioSnapshot({
+  title,
+  answers,
+  tone,
+}: {
+  title: string;
+  answers: QuizAnswers;
+  tone: "baseline" | "changed";
+}) {
+  return (
+    <section className={`rounded-lg border border-ink/10 p-4 shadow-soft ${tone === "baseline" ? "bg-white" : "bg-sky/75"}`}>
+      <p className="text-xs font-black uppercase tracking-wide text-leaf">{title}</p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <div className="rounded-lg bg-oat px-3 py-2">
+          <p className="text-[0.65rem] font-black uppercase tracking-wide text-ink/45">Grades</p>
+          <p className="mt-1 text-sm font-black text-ink">{gradeLabels[answers.predictedGrades]}</p>
         </div>
-
-        <label className="block text-sm font-black text-ink">
-          Desire to earn soon
-          <span className="mt-2 flex items-center justify-between rounded-lg border-2 border-ink/10 bg-oat px-4 py-3">
-            <span className="text-3xl font-black text-ink">{scenario.earnSoon}</span>
-            <span className="text-xs font-black uppercase tracking-wide text-ink/45">out of 5</span>
-          </span>
-          <input
-            type="range"
-            min={1}
-            max={5}
-            step={1}
-            value={scenario.earnSoon}
-            onChange={(event) => updateScenario({ earnSoon: Number(event.target.value) })}
-            className="mt-4 w-full accent-leaf"
-          />
-        </label>
+        <div className="rounded-lg bg-oat px-3 py-2">
+          <p className="text-[0.65rem] font-black uppercase tracking-wide text-ink/45">Travel</p>
+          <p className="mt-1 text-sm font-black text-ink">up to {answers.maxTravelMinutes} min</p>
+        </div>
+        <div className="rounded-lg bg-oat px-3 py-2">
+          <p className="text-[0.65rem] font-black uppercase tracking-wide text-ink/45">Debt</p>
+          <p className="mt-1 text-sm font-black text-ink">{debtLabels[answers.debtPreference]}</p>
+        </div>
+        <div className="rounded-lg bg-oat px-3 py-2">
+          <p className="text-[0.65rem] font-black uppercase tracking-wide text-ink/45">Target</p>
+          <p className="mt-1 text-sm font-black text-ink">{answers.targetCareer || answers.targetCourse || "not set"}</p>
+        </div>
+        <div className="rounded-lg bg-oat px-3 py-2 sm:col-span-2">
+          <p className="text-[0.65rem] font-black uppercase tracking-wide text-ink/45">Interests and day-to-day</p>
+          <p className="mt-1 text-sm font-black leading-5 text-ink">
+            {joinItems(answers.interests, "no interests set")} | {joinItems(answers.workStyles, "no styles set")}, earn soon{" "}
+            {answers.earnSoon}/5
+          </p>
+        </div>
       </div>
     </section>
   );
@@ -383,10 +586,9 @@ function MovementList({ changes, routeTitleById }: { changes: SimulatorChange[];
     <section className="mx-auto mt-6 max-w-5xl rounded-lg border border-ink/10 bg-white p-4 shadow-soft">
       <div>
         <p className="text-xs font-black uppercase tracking-wide text-leaf">Route movement</p>
-        <h2 className="mt-1 text-2xl font-black text-ink">What changed in the top routes?</h2>
+        <h2 className="mt-1 text-2xl font-black text-ink">Baseline compared with the temporary change</h2>
         <p className="mt-2 text-sm leading-6 text-ink/70">
-          Appeared and disappeared mean movement in or out of the visible top five. Routes can still be worth checking even when
-          they move down.
+          Movement shows how the visible top five changed in this demo scoring model. It is a planning prompt, not a prediction.
         </p>
       </div>
 
@@ -438,14 +640,15 @@ function MovementList({ changes, routeTitleById }: { changes: SimulatorChange[];
 
 export default function SimulatorPage() {
   const savedAnswers = useSavedQuizAnswers();
-  const [scenarioOverrides, setScenarioOverrides] = useState<Partial<QuizAnswers>>({});
+  const [selectedFactor, setSelectedFactor] = useState<SimulatorFactor>("grades");
+  const [scenarioPatch, setScenarioPatch] = useState<SimulatorFactorPatch>({});
   const scenario = useMemo(() => {
     if (!savedAnswers) {
       return null;
     }
 
-    return { ...savedAnswers, ...scenarioOverrides };
-  }, [savedAnswers, scenarioOverrides]);
+    return applySingleSimulatorChange(savedAnswers, selectedFactor, scenarioPatch);
+  }, [savedAnswers, scenarioPatch, selectedFactor]);
   const comparison = useMemo(() => {
     if (!savedAnswers || !scenario) {
       return null;
@@ -453,7 +656,7 @@ export default function SimulatorPage() {
 
     return buildSimulatorComparison(mockRoutes, savedAnswers, scenario, 5);
   }, [savedAnswers, scenario]);
-
+  const changedFactorCount = savedAnswers && scenario ? countSimulatorChangedFactors(savedAnswers, scenario) : 0;
   const routeTitleById = useMemo(() => new Map(mockRoutes.map((route) => [route.id, route.title])), []);
   const changesByRouteId = useMemo(() => {
     return new Map(comparison?.changes.map((change) => [change.routeId, change]) ?? []);
@@ -467,63 +670,32 @@ export default function SimulatorPage() {
     <AppShell>
       <section className="mx-auto max-w-3xl">
         <p className="text-sm font-black uppercase tracking-wide text-leaf">What-if simulator</p>
-        <h1 className="mt-3 text-3xl font-black leading-tight text-ink sm:text-5xl">Change the inputs, compare the trade-offs.</h1>
+        <h1 className="mt-3 text-3xl font-black leading-tight text-ink sm:text-5xl">Change one thing, then compare the trade-offs.</h1>
         <p className="mt-3 text-base leading-7 text-ink/75">
-          This uses your saved quiz as the baseline and recalculates route scores live. Treat the movement as a planning aid,
-          not a prediction about offers, jobs, or outcomes.
+          This uses your saved quiz as the baseline and applies one temporary change at a time. Scores use mock demo route data.
         </p>
       </section>
 
-      <section className="mx-auto mt-6 grid max-w-5xl gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-        <BaselineSummary answers={savedAnswers} />
+      <section className="mx-auto mt-6 grid max-w-5xl gap-4">
+        <BaselineNotice answers={savedAnswers} changedCount={changedFactorCount} />
+        <FactorPicker
+          selectedFactor={selectedFactor}
+          onSelect={(factor) => {
+            setSelectedFactor(factor);
+            setScenarioPatch({});
+          }}
+        />
         <ScenarioControls
-          baseline={savedAnswers}
+          selectedFactor={selectedFactor}
           scenario={scenario}
-          onChange={(update) => setScenarioOverrides((current) => ({ ...current, ...update }))}
-          onReset={() => setScenarioOverrides({})}
+          updatePatch={(patch) => setScenarioPatch((current) => ({ ...current, ...patch }))}
+          onReset={() => setScenarioPatch({})}
         />
       </section>
 
-      <section className="mx-auto mt-6 max-w-5xl rounded-lg border border-ink/10 bg-white/90 p-4 shadow-soft">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-wide text-leaf">Scenario now</p>
-            <h2 className="mt-1 text-xl font-black text-ink">The changed scores are using these values.</h2>
-          </div>
-          <div className="rounded-lg bg-mint px-4 py-3 text-sm font-black text-ink">
-            {countScenarioChanges(savedAnswers, scenario)} changed input{countScenarioChanges(savedAnswers, scenario) === 1 ? "" : "s"}
-          </div>
-        </div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-3">
-          <div className="rounded-lg bg-oat px-3 py-2">
-            <p className="text-[0.65rem] font-black uppercase tracking-wide text-ink/45">Grades</p>
-            <p className="mt-1 text-sm font-black text-ink">{gradeLabels[scenario.predictedGrades]}</p>
-          </div>
-          <div className="rounded-lg bg-oat px-3 py-2">
-            <p className="text-[0.65rem] font-black uppercase tracking-wide text-ink/45">Travel</p>
-            <p className="mt-1 text-sm font-black text-ink">up to {scenario.maxTravelMinutes} min</p>
-          </div>
-          <div className="rounded-lg bg-oat px-3 py-2">
-            <p className="text-[0.65rem] font-black uppercase tracking-wide text-ink/45">Debt</p>
-            <p className="mt-1 text-sm font-black text-ink">{debtLabels[scenario.debtPreference]}</p>
-          </div>
-          <div className="rounded-lg bg-oat px-3 py-2">
-            <p className="text-[0.65rem] font-black uppercase tracking-wide text-ink/45">Career</p>
-            <p className="mt-1 text-sm font-black text-ink">
-              <OptionalValue value={scenario.targetCareer} fallback="not set" />
-            </p>
-          </div>
-          <div className="rounded-lg bg-oat px-3 py-2">
-            <p className="text-[0.65rem] font-black uppercase tracking-wide text-ink/45">Course</p>
-            <p className="mt-1 text-sm font-black text-ink">
-              <OptionalValue value={scenario.targetCourse} fallback="not set" />
-            </p>
-          </div>
-          <div className="rounded-lg bg-oat px-3 py-2">
-            <p className="text-[0.65rem] font-black uppercase tracking-wide text-ink/45">Earn soon</p>
-            <p className="mt-1 text-sm font-black text-ink">{scenario.earnSoon} out of 5</p>
-          </div>
-        </div>
+      <section className="mx-auto mt-6 grid max-w-5xl gap-4 lg:grid-cols-2">
+        <ScenarioSnapshot title="Saved baseline" answers={savedAnswers} tone="baseline" />
+        <ScenarioSnapshot title="Temporary changed version" answers={scenario} tone="changed" />
       </section>
 
       <MovementList changes={comparison.changes} routeTitleById={routeTitleById} />
@@ -537,7 +709,7 @@ export default function SimulatorPage() {
         />
         <TopRouteList
           title="Changed top routes"
-          helper="The top five after the what-if controls."
+          helper="The top five after the one temporary change."
           routes={comparison.changedRoutes}
           changesByRouteId={changesByRouteId}
         />

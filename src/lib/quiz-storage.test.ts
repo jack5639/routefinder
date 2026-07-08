@@ -1,5 +1,29 @@
-import { describe, expect, it } from "vitest";
-import { normaliseQuizAnswers } from "@/lib/quiz-storage";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  clearQuizAnswers,
+  loadQuizAnswers,
+  loadQuizProgressStep,
+  normaliseQuizAnswers,
+  QUIZ_ANSWERS_STORAGE_KEY,
+  QUIZ_PROGRESS_STEP_STORAGE_KEY,
+} from "@/lib/quiz-storage";
+
+function stubWindowStorage(initialValues: Record<string, string>) {
+  const store = new Map(Object.entries(initialValues));
+
+  vi.stubGlobal("window", {
+    localStorage: {
+      getItem: vi.fn((key: string) => store.get(key) ?? null),
+      removeItem: vi.fn((key: string) => store.delete(key)),
+      setItem: vi.fn((key: string, value: string) => store.set(key, value)),
+    },
+    dispatchEvent: vi.fn(),
+  });
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("normaliseQuizAnswers", () => {
   it("accepts draft quiz answers without changing the data shape", () => {
@@ -50,5 +74,22 @@ describe("normaliseQuizAnswers", () => {
         constraints: [],
       }),
     ).toBeNull();
+  });
+
+  it("handles missing browser storage safely", () => {
+    expect(loadQuizAnswers()).toBeNull();
+    expect(loadQuizProgressStep(4)).toBeNull();
+    expect(() => clearQuizAnswers()).not.toThrow();
+  });
+
+  it("handles invalid stored quiz data safely", () => {
+    stubWindowStorage({
+      [QUIZ_ANSWERS_STORAGE_KEY]: "{not-json",
+      [QUIZ_PROGRESS_STEP_STORAGE_KEY]: "99",
+    });
+
+    expect(loadQuizAnswers()).toBeNull();
+    expect(loadQuizProgressStep(4)).toBeNull();
+    expect(() => clearQuizAnswers()).not.toThrow();
   });
 });

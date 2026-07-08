@@ -42,6 +42,13 @@ export interface RouteOption {
   title: string;
   type: RouteType;
   summary: string;
+  sourceUrl?: string;
+  applyUrl?: string;
+  deadline?: string;
+  lastChecked?: string;
+  evidenceLevel?: "demo" | "partial" | "source-backed";
+  costOrPaySummary?: string;
+  bursaryOrSupportSummary?: string;
   relatedInterests: string[];
   relatedCareers: string[];
   relatedCourses: string[];
@@ -112,6 +119,22 @@ export interface SavedRoadmap {
 }
 
 export type SimulatorMovementLabel = "improved" | "worsened" | "appeared" | "disappeared" | "steady";
+
+export type SimulatorFactor = "grades" | "travel" | "debt" | "target" | "interests" | "day-to-day";
+
+export type SimulatorFactorPatch = Partial<
+  Pick<
+    QuizAnswers,
+    | "predictedGrades"
+    | "maxTravelMinutes"
+    | "debtPreference"
+    | "targetCareer"
+    | "targetCourse"
+    | "interests"
+    | "workStyles"
+    | "earnSoon"
+  >
+>;
 
 export interface SimulatorChange {
   routeId: string;

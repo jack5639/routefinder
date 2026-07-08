@@ -89,7 +89,7 @@ export default function ResultsPage() {
         </h1>
         <p className="mt-3 text-base leading-7 text-ink/75">
           These categories are comparison aids, not final answers. They use your saved quiz answers to make fit, feasibility, constraints,
-          and confidence easier to talk through.
+          and confidence easier to talk through. Route recommendations use mock demo data until real source-backed data is added.
         </p>
 
         <div className="mt-5 grid gap-3 sm:grid-cols-3">

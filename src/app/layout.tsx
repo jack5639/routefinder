@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Future Route Planner",
+  title: "Routefinder",
   description: "A supportive prototype for comparing education and career routes.",
 };
 

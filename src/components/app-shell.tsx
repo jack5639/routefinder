@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { StartAgainButton } from "@/components/start-again-button";
 
 const navItems = [
   { href: "/", label: "Home" },
@@ -7,6 +8,7 @@ const navItems = [
   { href: "/results", label: "Results" },
   { href: "/saved-roadmap", label: "Saved" },
   { href: "/simulator", label: "What-if" },
+  { href: "/parent-summary", label: "Summary" },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -15,7 +17,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <header className="sticky top-0 z-10 -mx-4 border-b border-ink/10 bg-oat/90 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
         <nav className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <Link href="/" className="text-sm font-black tracking-wide text-ink">
-            Future Route Planner
+            Routefinder
           </Link>
           <div className="flex w-full gap-1 overflow-x-auto rounded-full border border-ink/10 bg-white/70 p-1 text-xs font-semibold shadow-sm sm:w-auto">
             {navItems.map((item) => (
@@ -27,6 +29,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 {item.label}
               </Link>
             ))}
+            <StartAgainButton />
           </div>
         </nav>
       </header>

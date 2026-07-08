@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { RouteDataPanel } from "@/components/route-data-panel";
 import { ScoreBar } from "@/components/score-bar";
 import { mockRoadmaps } from "@/data/roadmaps/mock-roadmaps";
 import { mockRoutes } from "@/data/routes/mock-routes";
@@ -34,12 +35,18 @@ function EmptySavedRoadmap() {
           Open a route from the results page, then save the roadmap that feels most useful to keep following. The app stores one roadmap
           locally for now.
         </p>
-        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
           <Link
             href="/results"
             className="inline-flex min-h-12 items-center justify-center rounded-full bg-ink px-5 py-3 text-sm font-black text-white transition hover:bg-leaf"
           >
             Go to results
+          </Link>
+          <Link
+            href="/parent-summary"
+            className="inline-flex min-h-12 items-center justify-center rounded-full border border-ink/15 bg-white px-5 py-3 text-sm font-black text-ink transition hover:bg-mint"
+          >
+            Parent summary
           </Link>
           <Link
             href="/quiz"
@@ -130,12 +137,24 @@ export default function SavedRoadmapPage() {
             </div>
           </div>
 
-          <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <Link
               href={`/roadmap/${route.id}`}
               className="inline-flex min-h-12 items-center justify-center rounded-full bg-ink px-5 py-3 text-sm font-black text-white transition hover:bg-leaf"
             >
               Open saved roadmap
+            </Link>
+            <Link
+              href="/simulator"
+              className="inline-flex min-h-12 items-center justify-center rounded-full border border-ink/15 bg-white px-5 py-3 text-sm font-black text-ink transition hover:bg-mint"
+            >
+              Test what-if
+            </Link>
+            <Link
+              href="/parent-summary"
+              className="inline-flex min-h-12 items-center justify-center rounded-full border border-ink/15 bg-white px-5 py-3 text-sm font-black text-ink transition hover:bg-mint"
+            >
+              Parent summary
             </Link>
             <Link
               href="/results"
@@ -186,6 +205,10 @@ export default function SavedRoadmapPage() {
             </p>
           ) : null}
         </aside>
+      </section>
+
+      <section className="mx-auto mt-4 max-w-4xl">
+        <RouteDataPanel route={route} />
       </section>
     </AppShell>
   );

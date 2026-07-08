@@ -43,7 +43,15 @@ export function loadSavedRoadmap(): SavedRoadmap | null {
   }
 }
 
+export function loadSavedRouteId() {
+  return loadSavedRoadmap()?.routeId ?? null;
+}
+
 export function saveSavedRoadmap(routeId: string) {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
   const savedRoadmap: SavedRoadmap = {
     routeId,
     savedAt: new Date().toISOString(),
@@ -56,6 +64,10 @@ export function saveSavedRoadmap(routeId: string) {
 }
 
 export function clearSavedRoadmap() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
   window.localStorage.removeItem(SAVED_ROADMAP_STORAGE_KEY);
   window.dispatchEvent(new Event(SAVED_ROADMAP_CHANGED_EVENT));
 }

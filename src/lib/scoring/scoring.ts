@@ -9,6 +9,8 @@ import type {
   ScoredRoute,
   SimulatorComparison,
   SimulatorChange,
+  SimulatorFactor,
+  SimulatorFactorPatch,
   SimulatorMovementLabel,
 } from "@/types";
 
@@ -45,11 +47,21 @@ const movementPriority: Record<SimulatorMovementLabel, number> = {
   steady: 1,
 };
 
+const simulatorFactorFields: Record<SimulatorFactor, (keyof SimulatorFactorPatch)[]> = {
+  grades: ["predictedGrades"],
+  travel: ["maxTravelMinutes"],
+  debt: ["debtPreference"],
+  target: ["targetCareer", "targetCourse"],
+  interests: ["interests"],
+  "day-to-day": ["workStyles", "earnSoon"],
+};
+
 export const decisionBoardCategoryDefinitions: DecisionBoardCategoryDefinition[] = [
   {
     id: "strong-fit",
     title: "Strong fit",
-    summary: "Routes with a strong current match across fit, feasibility, constraints, and confidence.",
+    summary:
+      "Routes with the strongest current match across fit, feasibility, constraints, and confidence. Treat this as a starting point, not certainty.",
   },
   {
     id: "realistic",
@@ -88,6 +100,15 @@ function includesLoose(values: string[], target: string) {
     const normalisedValue = normalise(value);
     return normalisedValue.includes(normalisedTarget) || normalisedTarget.includes(normalisedValue);
   });
+}
+
+function sameStringList(left: string[], right: string[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  const leftSet = new Set(left.map(normalise));
+  return right.every((value) => leftSet.has(normalise(value)));
 }
 
 function overlapScore(userValues: string[], routeValues: string[], pointsPerMatch: number, max: number) {
@@ -167,6 +188,51 @@ function rankAllRoutes(routes: RouteOption[], answers: QuizAnswers) {
     .sort((left, right) => right.totalScore - left.totalScore);
 }
 
+function cloneAnswerValue(value: unknown) {
+  return Array.isArray(value) ? [...value] : value;
+}
+
+function factorChanged(baselineAnswers: QuizAnswers, changedAnswers: QuizAnswers, factor: SimulatorFactor) {
+  return simulatorFactorFields[factor].some((field) => {
+    const baselineValue = baselineAnswers[field];
+    const changedValue = changedAnswers[field];
+
+    if (Array.isArray(baselineValue) && Array.isArray(changedValue)) {
+      return !sameStringList(baselineValue, changedValue);
+    }
+
+    return (baselineValue ?? "") !== (changedValue ?? "");
+  });
+}
+
+export function applySingleSimulatorChange(
+  baselineAnswers: QuizAnswers,
+  factor: SimulatorFactor,
+  patch: SimulatorFactorPatch,
+): QuizAnswers {
+  const changedAnswers: QuizAnswers = {
+    ...baselineAnswers,
+    subjects: [...baselineAnswers.subjects],
+    interests: [...baselineAnswers.interests],
+    workStyles: [...baselineAnswers.workStyles],
+    constraints: [...baselineAnswers.constraints],
+  };
+
+  simulatorFactorFields[factor].forEach((field) => {
+    if (Object.prototype.hasOwnProperty.call(patch, field)) {
+      (changedAnswers as Record<keyof SimulatorFactorPatch, unknown>)[field] = cloneAnswerValue(patch[field]);
+    }
+  });
+
+  return changedAnswers;
+}
+
+export function countSimulatorChangedFactors(baselineAnswers: QuizAnswers, changedAnswers: QuizAnswers) {
+  return (Object.keys(simulatorFactorFields) as SimulatorFactor[]).filter((factor) =>
+    factorChanged(baselineAnswers, changedAnswers, factor),
+  ).length;
+}
+
 function explainSimulatorChange({
   route,
   baselineAnswers,
@@ -232,6 +298,32 @@ function explainSimulatorChange({
       explanations.push("Lower-debt routes get extra weight when avoiding debt matters more.");
     } else {
       explanations.push("Changing debt preference adjusts how strongly cost-related constraints affect this route.");
+    }
+  }
+
+  if (!sameStringList(baselineAnswers.interests, changedAnswers.interests)) {
+    const baselineInterestFit = overlapScore(baselineAnswers.interests, route.relatedInterests, 1, 10);
+    const changedInterestFit = overlapScore(changedAnswers.interests, route.relatedInterests, 1, 10);
+
+    if (changedInterestFit > baselineInterestFit) {
+      explanations.push("The changed interests connect more closely with this route's demo interest tags.");
+    } else if (changedInterestFit < baselineInterestFit) {
+      explanations.push("The saved interests connect more closely with this route's demo interest tags.");
+    } else {
+      explanations.push("Changing interests shifts which routes get extra fit weight.");
+    }
+  }
+
+  if (!sameStringList(baselineAnswers.workStyles, changedAnswers.workStyles)) {
+    const baselineStyleFit = overlapScore(baselineAnswers.workStyles, route.workStyles, 1, 10);
+    const changedStyleFit = overlapScore(changedAnswers.workStyles, route.workStyles, 1, 10);
+
+    if (changedStyleFit > baselineStyleFit) {
+      explanations.push("The changed day-to-day preference is closer to this route's working style.");
+    } else if (changedStyleFit < baselineStyleFit) {
+      explanations.push("The saved day-to-day preference is closer to this route's working style.");
+    } else {
+      explanations.push("Changing day-to-day preference adjusts the working-style part of the fit score.");
     }
   }
 
@@ -392,6 +484,19 @@ export function buildDecisionBoard(routes: RouteOption[], answers: QuizAnswers):
     const group = groups.find((item) => item.id === categoryId);
     group?.routes.push(route);
   });
+
+  const strongFitGroup = groups.find((group) => group.id === "strong-fit");
+
+  if (scoredRoutes.length && strongFitGroup && strongFitGroup.routes.length === 0) {
+    const strongestCurrentFit = scoredRoutes[0];
+    const originalGroup = groups.find((group) => group.routes.some((route) => route.id === strongestCurrentFit.id));
+
+    if (originalGroup) {
+      originalGroup.routes = originalGroup.routes.filter((route) => route.id !== strongestCurrentFit.id);
+    }
+
+    strongFitGroup.routes.push(strongestCurrentFit);
+  }
 
   return groups;
 }

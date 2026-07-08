@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { RouteDataPanel } from "@/components/route-data-panel";
 import { ScoreBar } from "@/components/score-bar";
 import { saveSavedRoadmap } from "@/lib/saved-roadmap-storage";
 import { scoreRoute } from "@/lib/scoring";
@@ -199,6 +200,7 @@ function buildPlanSections(
   scored: ScoredRoute | null,
   answers: QuizAnswers | null,
 ): PlanSection[] {
+  // Custom roadmap generation can replace this template assembly later.
   const weekStep = findTemplateStep(roadmap, ["this week", "next week", "next 2 weeks"], 0);
   const monthStep = findTemplateStep(roadmap, ["this month", "4 weeks", "6 weeks", "this term"], 1);
   const beforeStep = findTemplateStep(roadmap, ["before", "applications", "applying", "enrolment", "final choices"], 2);
@@ -349,6 +351,11 @@ export function RoadmapView({ route, roadmap }: { route: RouteOption; roadmap: R
 
   function handleSaveRoadmap() {
     const saved = saveSavedRoadmap(route.id);
+
+    if (!saved) {
+      return;
+    }
+
     const timestamp = formatSavedAt(saved.savedAt);
 
     setSaveMessage(
@@ -368,7 +375,13 @@ export function RoadmapView({ route, roadmap }: { route: RouteOption; roadmap: R
           outcomes.
         </p>
 
-        <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="mt-4 rounded-lg border border-ink/10 bg-sky/70 px-4 py-3 text-sm font-semibold leading-6 text-ink/75">
+          <span className="font-black text-ink">Template roadmap: </span>
+          This plan is built from demo templates until custom roadmap generation is added.
+          {!answers ? " Opening a route directly still works; completing the quiz makes the checks more personal." : null}
+        </div>
+
+        <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           <button
             type="button"
             onClick={handleSaveRoadmap}
@@ -386,6 +399,12 @@ export function RoadmapView({ route, roadmap }: { route: RouteOption; roadmap: R
             View saved roadmap
           </Link>
           <Link
+            href="/parent-summary"
+            className="inline-flex min-h-12 items-center justify-center rounded-full border border-ink/15 bg-white px-5 py-3 text-sm font-black text-ink transition hover:bg-mint sm:w-auto"
+          >
+            Parent summary
+          </Link>
+          <Link
             href="/results"
             className="inline-flex min-h-12 items-center justify-center rounded-full border border-ink/15 bg-white px-5 py-3 text-sm font-black text-ink/75 transition hover:bg-mint sm:w-auto"
           >
@@ -397,6 +416,10 @@ export function RoadmapView({ route, roadmap }: { route: RouteOption; roadmap: R
           <span className="font-black text-ink">Save status: </span>
           <span aria-live="polite">{saveMessage || saveHint}</span>
         </div>
+      </section>
+
+      <section className="mx-auto mt-6 max-w-4xl">
+        <RouteDataPanel route={route} />
       </section>
 
       <section className="mx-auto mt-6 grid max-w-4xl gap-3 sm:grid-cols-2 lg:grid-cols-4">
