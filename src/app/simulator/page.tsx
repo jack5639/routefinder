@@ -5,8 +5,13 @@ import { type KeyboardEvent, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { CatalogueStatusStrip } from "@/components/catalogue-status-strip";
 import { ScoreBar } from "@/components/score-bar";
+<<<<<<< HEAD
 import { applySingleSimulatorChange, buildSimulatorComparison, countSimulatorChangedFactors } from "@/lib/scoring";
 import { useCatalogueRoutes } from "@/lib/use-catalogue-routes";
+=======
+import { mockRoutes } from "@/data/routes/mock-routes";
+import { applySingleSimulatorChange, buildSimulatorComparison, countSimulatorChangedFactors } from "@/lib/scoring";
+>>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
 import { useSavedQuizAnswers } from "@/lib/use-saved-quiz-answers";
 import type {
   DebtPreference,
@@ -641,7 +646,10 @@ function MovementList({ changes, routeTitleById }: { changes: SimulatorChange[];
 
 export default function SimulatorPage() {
   const savedAnswers = useSavedQuizAnswers();
+<<<<<<< HEAD
   const catalogue = useCatalogueRoutes();
+=======
+>>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
   const [selectedFactor, setSelectedFactor] = useState<SimulatorFactor>("grades");
   const [scenarioPatch, setScenarioPatch] = useState<SimulatorFactorPatch>({});
   const scenario = useMemo(() => {
@@ -656,10 +664,17 @@ export default function SimulatorPage() {
       return null;
     }
 
+<<<<<<< HEAD
     return buildSimulatorComparison(catalogue.routes, savedAnswers, scenario, 5);
   }, [catalogue.routes, savedAnswers, scenario]);
   const changedFactorCount = savedAnswers && scenario ? countSimulatorChangedFactors(savedAnswers, scenario) : 0;
   const routeTitleById = useMemo(() => new Map(catalogue.routes.map((route) => [route.id, route.title])), [catalogue.routes]);
+=======
+    return buildSimulatorComparison(mockRoutes, savedAnswers, scenario, 5);
+  }, [savedAnswers, scenario]);
+  const changedFactorCount = savedAnswers && scenario ? countSimulatorChangedFactors(savedAnswers, scenario) : 0;
+  const routeTitleById = useMemo(() => new Map(mockRoutes.map((route) => [route.id, route.title])), []);
+>>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
   const changesByRouteId = useMemo(() => {
     return new Map(comparison?.changes.map((change) => [change.routeId, change]) ?? []);
   }, [comparison]);
@@ -674,8 +689,12 @@ export default function SimulatorPage() {
         <p className="text-sm font-black uppercase tracking-wide text-leaf">What-if simulator</p>
         <h1 className="mt-3 text-3xl font-black leading-tight text-ink sm:text-5xl">Change one thing, then compare the trade-offs.</h1>
         <p className="mt-3 text-base leading-7 text-ink/75">
+<<<<<<< HEAD
           This uses your saved quiz as the baseline and applies one temporary change at a time. Scores use the local catalogue when it has
           synced, with the demo fallback visible when needed.
+=======
+          This uses your saved quiz as the baseline and applies one temporary change at a time. Scores use mock demo route data.
+>>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
         </p>
         <div className="mt-5">
           <CatalogueStatusStrip freshness={catalogue.freshness} usedFallback={catalogue.usedFallback} />

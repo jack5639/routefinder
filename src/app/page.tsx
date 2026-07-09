@@ -4,7 +4,11 @@ import { mockRoutes } from "@/data/routes/mock-routes";
 const demoNotes = [
   "No account is created in this prototype.",
   "Answers and one saved roadmap stay in this browser.",
+<<<<<<< HEAD
   "Route data is clearly labelled with source freshness.",
+=======
+  "Route data is clearly labelled mock/demo data.",
+>>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
 ];
 
 export default function LandingPage() {
@@ -41,8 +45,12 @@ export default function LandingPage() {
         </div>
 
         <p className="mt-6 max-w-xl text-sm font-semibold leading-6 text-ink/60">
+<<<<<<< HEAD
           The catalogue has {mockRoutes.length} broad route options. Source-backed UCAS, Discover Uni, and apprenticeship matches appear
           after the local data sync runs.
+=======
+          The demo catalogue currently has {mockRoutes.length} mocked route options. Live UCAS, GOV.UK, and apprenticeship integrations are not connected yet.
+>>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
         </p>
       </section>
     </main>

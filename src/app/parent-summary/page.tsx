@@ -4,12 +4,21 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { RouteDataPanel } from "@/components/route-data-panel";
+<<<<<<< HEAD
 import { clearSavedRoadmap } from "@/lib/saved-roadmap-storage";
 import { scoreRoute } from "@/lib/scoring";
 import { useCatalogueRoute } from "@/lib/use-catalogue-routes";
 import { useSavedQuizAnswers } from "@/lib/use-saved-quiz-answers";
 import { useSavedRoadmap } from "@/lib/use-saved-roadmap";
 import type { DebtPreference, GeneratedRoadmap, GradeBand, QuizAnswers, ScoredRoute } from "@/types";
+=======
+import { mockRoutes } from "@/data/routes/mock-routes";
+import { clearSavedRoadmap } from "@/lib/saved-roadmap-storage";
+import { scoreRoute } from "@/lib/scoring";
+import { useSavedQuizAnswers } from "@/lib/use-saved-quiz-answers";
+import { useSavedRoadmap } from "@/lib/use-saved-roadmap";
+import type { DebtPreference, GradeBand, QuizAnswers, ScoredRoute } from "@/types";
+>>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
 
 const gradeLabels: Record<GradeBand, string> = {
   "needs-building": "building up",
@@ -33,7 +42,11 @@ function summaryLines(title: string, items: string[]) {
   return [title, ...items.map((item) => `- ${item}`)].join("\n");
 }
 
+<<<<<<< HEAD
 function buildParentSummary(answers: QuizAnswers, scored: ScoredRoute, generatedRoadmap?: GeneratedRoadmap) {
+=======
+function buildParentSummary(answers: QuizAnswers, scored: ScoredRoute) {
+>>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
   const profile = summaryLines("Student's current situation", [
     `Current stage: ${answers.currentStage}.`,
     `Predicted grade band: ${gradeLabels[answers.predictedGrades]}.`,
@@ -47,7 +60,11 @@ function buildParentSummary(answers: QuizAnswers, scored: ScoredRoute, generated
   ]);
 
   const route = summaryLines("Saved route", [
+<<<<<<< HEAD
     `${generatedRoadmap?.headline ?? scored.title} (${scored.type}).`,
+=======
+    `${scored.title} (${scored.type}).`,
+>>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
     scored.summary,
     `Current demo scores: fit ${scored.scores.fit}, feasibility ${scored.scores.feasibility}, constraints ${scored.scores.constraint}, confidence ${scored.scores.confidence}.`,
   ]);
@@ -58,6 +75,7 @@ function buildParentSummary(answers: QuizAnswers, scored: ScoredRoute, generated
   );
   const watchOuts = summaryLines("Watch-outs to check calmly", scored.explanation.watchOuts.slice(0, 4));
   const nextSteps = summaryLines("Next steps", scored.explanation.nextSteps.slice(0, 4));
+<<<<<<< HEAD
   const customRoadmap = generatedRoadmap
     ? summaryLines("Saved custom roadmap", [
         generatedRoadmap.confidenceNote,
@@ -66,13 +84,21 @@ function buildParentSummary(answers: QuizAnswers, scored: ScoredRoute, generated
     : "";
   const caveat = summaryLines("Confidence caveat", [
     "This is a Routefinder summary using saved quiz answers, deterministic scoring, and the local route catalogue where it has synced.",
+=======
+  const caveat = summaryLines("Confidence caveat", [
+    "This is a Routefinder demo summary using saved quiz answers, deterministic scoring, and mock route data.",
+>>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
     "It is useful for a planning conversation, but it is not a promise about offers, jobs, funding, deadlines, or local availability.",
     "The next useful move is to check provider, employer, or official guidance directly before acting.",
   ]);
 
+<<<<<<< HEAD
   return ["Routefinder parent summary", profile, route, why, watchOuts, nextSteps, customRoadmap, caveat]
     .filter(Boolean)
     .join("\n\n");
+=======
+  return ["Routefinder parent summary", profile, route, why, watchOuts, nextSteps, caveat].join("\n\n");
+>>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
 }
 
 function EmptyState({
@@ -135,9 +161,14 @@ function InfoBlock({ title, items }: { title: string; items: string[] }) {
 export default function ParentSummaryPage() {
   const answers = useSavedQuizAnswers();
   const savedRoadmap = useSavedRoadmap();
+<<<<<<< HEAD
   const catalogue = useCatalogueRoute(savedRoadmap?.routeId);
   const [copyStatus, setCopyStatus] = useState("");
   const route = catalogue.route;
+=======
+  const [copyStatus, setCopyStatus] = useState("");
+  const route = savedRoadmap ? mockRoutes.find((item) => item.id === savedRoadmap.routeId) : null;
+>>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
   const scored = useMemo(() => {
     if (!answers || !route) {
       return null;
@@ -150,8 +181,13 @@ export default function ParentSummaryPage() {
       return "";
     }
 
+<<<<<<< HEAD
     return buildParentSummary(answers, scored, savedRoadmap?.generatedRoadmap);
   }, [answers, savedRoadmap?.generatedRoadmap, scored]);
+=======
+    return buildParentSummary(answers, scored);
+  }, [answers, scored]);
+>>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
 
   async function copySummary() {
     if (!summaryText) {
@@ -279,9 +315,15 @@ export default function ParentSummaryPage() {
             title="Saved route"
             items={[
               `${scored.title} (${scored.type}).`,
+<<<<<<< HEAD
               savedRoadmap.generatedRoadmap?.sections[0]?.tasks[0]?.detail ?? scored.explanation.nextSteps[0],
               scored.explanation.whyThisRouteFits[0],
               scored.explanation.watchOuts[0],
+=======
+              scored.explanation.whyThisRouteFits[0],
+              scored.explanation.watchOuts[0],
+              scored.explanation.nextSteps[0],
+>>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
             ]}
           />
           <RouteDataPanel route={route} compact />

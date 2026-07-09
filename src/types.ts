@@ -129,17 +129,23 @@ export interface RouteOption {
   title: string;
   type: RouteType;
   summary: string;
+<<<<<<< HEAD
   sourceKind?: SourceKind;
+=======
+>>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
   sourceUrl?: string;
   applyUrl?: string;
   deadline?: string;
   lastChecked?: string;
   evidenceLevel?: "demo" | "partial" | "source-backed";
+<<<<<<< HEAD
   opportunityCount?: number;
   lastSyncedAt?: string;
   freshnessStatus?: CatalogueFreshness;
   sourceRecordIds?: string[];
   opportunities?: RouteOpportunity[];
+=======
+>>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
   costOrPaySummary?: string;
   bursaryOrSupportSummary?: string;
   relatedInterests: string[];

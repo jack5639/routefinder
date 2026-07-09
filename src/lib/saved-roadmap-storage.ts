@@ -58,7 +58,11 @@ export function loadSavedRouteId() {
   return loadSavedRoadmap()?.routeId ?? null;
 }
 
+<<<<<<< HEAD
 export function saveSavedRoadmap(routeId: string, generatedRoadmap?: SavedRoadmap["generatedRoadmap"]) {
+=======
+export function saveSavedRoadmap(routeId: string) {
+>>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
   if (typeof window === "undefined") {
     return null;
   }

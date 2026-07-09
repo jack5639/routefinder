@@ -9,7 +9,11 @@ const navItems = [
   { href: "/roadmap", label: "Roadmap" },
   { href: "/saved-roadmap", label: "Saved" },
   { href: "/simulator", label: "What-if" },
+<<<<<<< HEAD
   { href: "/summary", label: "Summary" },
+=======
+  { href: "/parent-summary", label: "Summary" },
+>>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {

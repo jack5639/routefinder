@@ -6,13 +6,20 @@ A mobile-first MVP prototype for helping 16-19-year-olds compare education, appr
 
 - Sign-in/onboarding placeholder at `/`
 - Full-screen five-question route-builder quiz at `/quiz`
+<<<<<<< HEAD
 - Mock recommendation results with local feedback/reranking at `/results`
 - Compatibility roadmap landing at `/roadmap`
+=======
+- Mock recommendation results at `/results`
+>>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
 - Route roadmaps at `/roadmap/[routeId]`
 - One saved local roadmap at `/saved-roadmap`
 - One-change-at-a-time what-if simulator at `/simulator`
 - Copyable parent-friendly summary at `/parent-summary`
+<<<<<<< HEAD
 - Compatibility summary redirect at `/summary`
+=======
+>>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
 - Pure deterministic scoring logic in `src/lib/scoring`
 - Mock route data in `src/data/routes`
 - Mock roadmap templates in `src/data/roadmaps`
@@ -72,4 +79,8 @@ pnpm build
 
 ## Notes
 
+<<<<<<< HEAD
 This scaffold intentionally does not include real authentication, payments, live UCAS/GOV.UK/apprenticeship APIs, account storage, source-backed route data, or custom/generated roadmaps yet. Route data is mocked so the scoring, feedback, and UX can be shaped before adding live integrations.
+=======
+This scaffold intentionally does not include real authentication, payments, live UCAS/GOV.UK/apprenticeship APIs, account storage, source-backed route data, or custom/generated roadmaps yet. Route data is mocked so the scoring and UX can be shaped before adding live integrations.
+>>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
