@@ -1,4 +1,5 @@
 import type { SavedRoadmap } from "@/types";
+import { normaliseGeneratedRoadmap } from "@/lib/roadmaps/generated-roadmap";
 
 export const SAVED_ROADMAP_STORAGE_KEY = "routefinder.savedRoadmap.v1";
 export const SAVED_ROADMAP_CHANGED_EVENT = "routefinder:saved-roadmap-changed";
@@ -19,10 +20,20 @@ export function normaliseSavedRoadmap(value: unknown): SavedRoadmap | null {
     return null;
   }
 
-  return {
+  const savedRoadmap: SavedRoadmap = {
     routeId: candidate.routeId.trim(),
     savedAt: candidate.savedAt,
   };
+
+  const generatedRoadmap = normaliseGeneratedRoadmap(candidate.generatedRoadmap, {
+    routeId: savedRoadmap.routeId,
+  });
+
+  if (generatedRoadmap) {
+    savedRoadmap.generatedRoadmap = generatedRoadmap;
+  }
+
+  return savedRoadmap;
 }
 
 export function loadSavedRoadmap(): SavedRoadmap | null {
@@ -43,11 +54,23 @@ export function loadSavedRoadmap(): SavedRoadmap | null {
   }
 }
 
-export function saveSavedRoadmap(routeId: string) {
+export function loadSavedRouteId() {
+  return loadSavedRoadmap()?.routeId ?? null;
+}
+
+export function saveSavedRoadmap(routeId: string, generatedRoadmap?: SavedRoadmap["generatedRoadmap"]) {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
   const savedRoadmap: SavedRoadmap = {
     routeId,
     savedAt: new Date().toISOString(),
   };
+
+  if (generatedRoadmap) {
+    savedRoadmap.generatedRoadmap = generatedRoadmap;
+  }
 
   window.localStorage.setItem(SAVED_ROADMAP_STORAGE_KEY, JSON.stringify(savedRoadmap));
   window.dispatchEvent(new Event(SAVED_ROADMAP_CHANGED_EVENT));
@@ -56,6 +79,10 @@ export function saveSavedRoadmap(routeId: string) {
 }
 
 export function clearSavedRoadmap() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
   window.localStorage.removeItem(SAVED_ROADMAP_STORAGE_KEY);
   window.dispatchEvent(new Event(SAVED_ROADMAP_CHANGED_EVENT));
 }

@@ -4,17 +4,38 @@ A mobile-first MVP prototype for helping 16-19-year-olds compare education, appr
 
 ## What is included
 
-- Landing page at `/`
-- Route-builder quiz placeholder at `/quiz`
-- Mock recommendation results at `/results`
+- Sign-in/onboarding placeholder at `/`
+- Full-screen five-question route-builder quiz at `/quiz`
+- Mock recommendation results with local feedback/reranking at `/results`
+- Compatibility roadmap landing at `/roadmap`
 - Route roadmaps at `/roadmap/[routeId]`
 - One saved local roadmap at `/saved-roadmap`
-- Basic what-if simulator at `/simulator`
+- One-change-at-a-time what-if simulator at `/simulator`
+- Copyable parent-friendly summary at `/parent-summary`
+- Compatibility summary redirect at `/summary`
 - Pure deterministic scoring logic in `src/lib/scoring`
 - Mock route data in `src/data/routes`
 - Mock roadmap templates in `src/data/roadmaps`
-- 10 test personas in `src/data/test-personas`
-- Vitest unit tests for scoring behavior
+- 10 test personas with broad expected ranking behavior in `src/data/test-personas`
+- Practical product docs in `docs/`
+- Vitest unit tests for scoring, storage, personas, and route feedback
+
+## Route map
+
+Canonical app routes:
+
+- `/`
+- `/quiz`
+- `/results`
+- `/roadmap/[routeId]`
+- `/saved-roadmap`
+- `/simulator`
+- `/parent-summary`
+
+Compatibility routes from the original MVP brief:
+
+- `/roadmap` opens the saved route-specific roadmap when one exists, otherwise it points users back to results/saved roadmap.
+- `/summary` redirects to `/parent-summary`.
 
 ## Run locally
 
@@ -51,4 +72,4 @@ pnpm build
 
 ## Notes
 
-This scaffold intentionally does not include authentication, payments, live UCAS/GOV.UK/apprenticeship APIs, account storage, or shareable parent summaries yet. Route data is mocked so the scoring and UX can be shaped before adding live integrations.
+This scaffold intentionally does not include real authentication, payments, live UCAS/GOV.UK/apprenticeship APIs, account storage, source-backed route data, or custom/generated roadmaps yet. Route data is mocked so the scoring, feedback, and UX can be shaped before adding live integrations.

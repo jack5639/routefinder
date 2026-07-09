@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { RouteDataPanel } from "@/components/route-data-panel";
 import { ScoreBar } from "@/components/score-bar";
 import { mockRoadmaps } from "@/data/roadmaps/mock-roadmaps";
-import { mockRoutes } from "@/data/routes/mock-routes";
 import { clearSavedRoadmap } from "@/lib/saved-roadmap-storage";
 import { scoreRoute } from "@/lib/scoring";
+import { useCatalogueRoute } from "@/lib/use-catalogue-routes";
 import { useSavedQuizAnswers } from "@/lib/use-saved-quiz-answers";
 import { useSavedRoadmap } from "@/lib/use-saved-roadmap";
 
@@ -34,12 +35,18 @@ function EmptySavedRoadmap() {
           Open a route from the results page, then save the roadmap that feels most useful to keep following. The app stores one roadmap
           locally for now.
         </p>
-        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
           <Link
             href="/results"
             className="inline-flex min-h-12 items-center justify-center rounded-full bg-ink px-5 py-3 text-sm font-black text-white transition hover:bg-leaf"
           >
             Go to results
+          </Link>
+          <Link
+            href="/parent-summary"
+            className="inline-flex min-h-12 items-center justify-center rounded-full border border-ink/15 bg-white px-5 py-3 text-sm font-black text-ink transition hover:bg-mint"
+          >
+            Parent summary
           </Link>
           <Link
             href="/quiz"
@@ -55,10 +62,12 @@ function EmptySavedRoadmap() {
 
 export default function SavedRoadmapPage() {
   const savedRoadmap = useSavedRoadmap();
+  const catalogue = useCatalogueRoute(savedRoadmap?.routeId);
   const answers = useSavedQuizAnswers();
   const [clearMessage, setClearMessage] = useState("");
-  const route = savedRoadmap ? mockRoutes.find((item) => item.id === savedRoadmap.routeId) : null;
+  const route = catalogue.route;
   const roadmap = savedRoadmap ? mockRoadmaps.find((item) => item.routeId === savedRoadmap.routeId) : null;
+  const generatedRoadmap = savedRoadmap?.generatedRoadmap;
 
   const scored = useMemo(() => {
     if (!route || !answers) {
@@ -79,8 +88,7 @@ export default function SavedRoadmapPage() {
           <p className="text-sm font-black uppercase tracking-wide text-coral">Saved roadmap</p>
           <h1 className="mt-3 text-3xl font-black leading-tight text-ink sm:text-5xl">This saved route is no longer available.</h1>
           <p className="mt-3 text-base leading-7 text-ink/75">
-            The saved route id is still on this device, but the mock route data no longer includes it. Clearing it lets a new roadmap be
-            saved.
+            The saved route id is still on this device, but the current catalogue does not include it. Clearing it lets a new roadmap be saved.
           </p>
           <button
             type="button"
@@ -104,38 +112,59 @@ export default function SavedRoadmapPage() {
     <AppShell>
       <section className="mx-auto max-w-4xl">
         <p className="text-sm font-black uppercase tracking-wide text-leaf">Saved roadmap</p>
-        <h1 className="mt-3 text-3xl font-black leading-tight text-ink sm:text-5xl">{route.title}</h1>
+        <h1 className="mt-3 text-3xl font-black leading-tight text-ink sm:text-5xl">
+          {generatedRoadmap?.headline ?? route.title}
+        </h1>
         <p className="mt-3 max-w-3xl text-base leading-7 text-ink/75">
           This is the one roadmap currently saved on this device. It can be replaced from any route roadmap page.
         </p>
         <div className="mt-4 rounded-lg border border-ink/10 bg-mint px-4 py-3 text-sm font-black leading-6 text-ink">
-          Saved locally{savedAtLabel ? ` at ${savedAtLabel}` : ""}.
+          {generatedRoadmap ? "Custom roadmap saved locally" : "Template roadmap saved locally"}
+          {savedAtLabel ? ` at ${savedAtLabel}` : ""}.
         </div>
       </section>
 
       <section className="mx-auto mt-6 grid max-w-4xl gap-4 lg:grid-cols-[1.05fr_0.95fr]">
         <article className="rounded-lg border border-ink/10 bg-white p-4 shadow-soft sm:p-5">
           <p className="text-xs font-black uppercase tracking-wide text-leaf">{route.type}</p>
-          <h2 className="mt-2 text-2xl font-black leading-tight text-ink">{roadmap.heading}</h2>
-          <p className="mt-2 text-sm font-semibold leading-6 text-ink/70">{roadmap.overview}</p>
+          <h2 className="mt-2 text-2xl font-black leading-tight text-ink">{generatedRoadmap?.headline ?? roadmap.heading}</h2>
+          <p className="mt-2 text-sm font-semibold leading-6 text-ink/70">
+            {generatedRoadmap ? generatedRoadmap.profileSummary : roadmap.overview}
+          </p>
 
           <div className="mt-4 space-y-3">
             <div className="rounded-lg bg-oat px-4 py-3">
               <p className="text-xs font-black uppercase text-ink/45">Next useful step</p>
-              <p className="mt-1 text-sm font-semibold leading-6 text-ink/75">{roadmap.steps[0]?.detail ?? route.nextSteps[0]}</p>
+              <p className="mt-1 text-sm font-semibold leading-6 text-ink/75">
+                {generatedRoadmap?.sections[0]?.tasks[0]?.detail ?? roadmap.steps[0]?.detail ?? route.nextSteps[0]}
+              </p>
             </div>
             <div className="rounded-lg bg-oat px-4 py-3">
               <p className="text-xs font-black uppercase text-ink/45">Backup routes to keep visible</p>
-              <p className="mt-1 text-sm font-semibold leading-6 text-ink/75">{route.backupOptions.join(", ")}</p>
+              <p className="mt-1 text-sm font-semibold leading-6 text-ink/75">
+                {(generatedRoadmap?.backupOptions ?? route.backupOptions).join(", ")}
+              </p>
             </div>
           </div>
 
-          <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <Link
               href={`/roadmap/${route.id}`}
               className="inline-flex min-h-12 items-center justify-center rounded-full bg-ink px-5 py-3 text-sm font-black text-white transition hover:bg-leaf"
             >
               Open saved roadmap
+            </Link>
+            <Link
+              href="/simulator"
+              className="inline-flex min-h-12 items-center justify-center rounded-full border border-ink/15 bg-white px-5 py-3 text-sm font-black text-ink transition hover:bg-mint"
+            >
+              Test what-if
+            </Link>
+            <Link
+              href="/parent-summary"
+              className="inline-flex min-h-12 items-center justify-center rounded-full border border-ink/15 bg-white px-5 py-3 text-sm font-black text-ink transition hover:bg-mint"
+            >
+              Parent summary
             </Link>
             <Link
               href="/results"
@@ -186,6 +215,10 @@ export default function SavedRoadmapPage() {
             </p>
           ) : null}
         </aside>
+      </section>
+
+      <section className="mx-auto mt-4 max-w-4xl">
+        <RouteDataPanel route={route} />
       </section>
     </AppShell>
   );

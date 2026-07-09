@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { CatalogueStatusStrip } from "@/components/catalogue-status-strip";
 import { RouteCard } from "@/components/route-card";
-import { mockRoutes } from "@/data/routes/mock-routes";
-import { buildDecisionBoard } from "@/lib/scoring";
+import { clearRouteFeedbackState, toggleStoredRouteFeedbackAction } from "@/lib/route-feedback-storage";
+import { buildDecisionBoardWithFeedback, getRouteFeedbackActionLabel, getRouteFeedbackCount } from "@/lib/scoring";
+import { useCatalogueRoutes } from "@/lib/use-catalogue-routes";
+import { useRouteFeedback } from "@/lib/use-route-feedback";
 import { useSavedQuizAnswers } from "@/lib/use-saved-quiz-answers";
-import type { DecisionBoardCategoryId, GradeBand } from "@/types";
+import type { DecisionBoardCategoryId, GradeBand, RouteFeedbackActionId } from "@/types";
 
 const gradeLabels: Record<GradeBand, string> = {
   "needs-building": "building up",
@@ -67,14 +70,28 @@ function EmptyResults() {
 
 export default function ResultsPage() {
   const answers = useSavedQuizAnswers();
+  const catalogue = useCatalogueRoutes();
+  const feedbackState = useRouteFeedback();
+  const [feedbackMessage, setFeedbackMessage] = useState("");
 
   const decisionBoard = useMemo(() => {
     if (!answers) {
       return [];
     }
 
-    return buildDecisionBoard(mockRoutes, answers);
-  }, [answers]);
+    return buildDecisionBoardWithFeedback(catalogue.routes, answers, feedbackState);
+  }, [answers, catalogue.routes, feedbackState]);
+  const feedbackCount = getRouteFeedbackCount(feedbackState);
+
+  function handleFeedbackAction(routeId: string, actionId: RouteFeedbackActionId) {
+    toggleStoredRouteFeedbackAction(routeId, actionId);
+    setFeedbackMessage(`${getRouteFeedbackActionLabel(actionId)} saved. The board has been reweighted on this device.`);
+  }
+
+  function handleClearFeedback() {
+    clearRouteFeedbackState();
+    setFeedbackMessage("Feedback cleared. The board is back to the saved quiz answers.");
+  }
 
   if (!answers) {
     return <EmptyResults />;
@@ -89,8 +106,19 @@ export default function ResultsPage() {
         </h1>
         <p className="mt-3 text-base leading-7 text-ink/75">
           These categories are comparison aids, not final answers. They use your saved quiz answers to make fit, feasibility, constraints,
-          and confidence easier to talk through.
+          and confidence easier to talk through. Real data is used when the local catalogue has synced; otherwise the demo fallback remains
+          visible.
         </p>
+
+        <div className="mt-5">
+          <CatalogueStatusStrip freshness={catalogue.freshness} usedFallback={catalogue.usedFallback} />
+        </div>
+
+        {catalogue.isLoading ? (
+          <p className="mt-3 rounded-lg bg-white/80 px-3 py-2 text-sm font-black text-ink/65" aria-live="polite">
+            Checking local catalogue freshness...
+          </p>
+        ) : null}
 
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
           <div className="rounded-lg bg-white/85 p-3">
@@ -121,6 +149,35 @@ export default function ResultsPage() {
         >
           Update quiz answers
         </Link>
+
+        <div className="mt-5 rounded-lg border border-ink/10 bg-white/85 p-4 shadow-sm">
+          <p className="text-xs font-black uppercase tracking-wide text-ink/45">Feedback and reranking</p>
+          <p className="mt-2 text-sm font-semibold leading-6 text-ink/72">
+            Route feedback is saved locally and nudges the order on this device. It is a comparison preference, not a claim that one route
+            is the right answer.
+          </p>
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm font-black text-ink">
+              {feedbackCount
+                ? `${feedbackCount} route${feedbackCount === 1 ? "" : "s"} with active feedback.`
+                : "No active feedback yet."}
+            </p>
+            {feedbackCount ? (
+              <button
+                type="button"
+                onClick={handleClearFeedback}
+                className="inline-flex min-h-10 items-center justify-center rounded-full border border-ink/15 bg-white px-4 py-2 text-xs font-black text-ink transition hover:bg-[#ffe0d8]"
+              >
+                Clear feedback
+              </button>
+            ) : null}
+          </div>
+          {feedbackMessage ? (
+            <p className="mt-3 rounded-lg bg-mint px-3 py-2 text-sm font-black text-ink" aria-live="polite">
+              {feedbackMessage}
+            </p>
+          ) : null}
+        </div>
       </section>
 
       <section className="mx-auto mt-6 grid max-w-5xl gap-5">
@@ -143,7 +200,12 @@ export default function ResultsPage() {
             {group.routes.length ? (
               <div className="mt-4 grid gap-4 xl:grid-cols-2">
                 {group.routes.map((route) => (
-                  <RouteCard key={route.id} route={route} />
+                  <RouteCard
+                    key={route.id}
+                    feedbackEntry={feedbackState.entries[route.id] ?? null}
+                    onFeedbackAction={handleFeedbackAction}
+                    route={route}
+                  />
                 ))}
               </div>
             ) : (

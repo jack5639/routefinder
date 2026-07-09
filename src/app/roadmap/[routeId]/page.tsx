@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
 import { mockRoadmaps } from "@/data/roadmaps/mock-roadmaps";
-import { mockRoutes } from "@/data/routes/mock-routes";
+import { getCatalogueRoute } from "@/lib/catalog/queries";
 import { RoadmapView } from "./roadmap-view";
+
+export const dynamic = "force-dynamic";
 
 type RoadmapPageProps = {
   params: Promise<{
@@ -9,15 +11,9 @@ type RoadmapPageProps = {
   }>;
 };
 
-export function generateStaticParams() {
-  return mockRoutes.map((route) => ({
-    routeId: route.id,
-  }));
-}
-
 export default async function RoadmapPage({ params }: RoadmapPageProps) {
   const { routeId } = await params;
-  const route = mockRoutes.find((item) => item.id === routeId);
+  const route = getCatalogueRoute(routeId);
   const roadmap = mockRoadmaps.find((item) => item.routeId === routeId);
 
   if (!route || !roadmap) {

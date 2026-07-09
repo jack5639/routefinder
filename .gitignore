@@ -9,3 +9,6 @@ coverage
 .env.*.local
 *.log
 *.zip
+data/catalog/*.sqlite
+data/catalog/*.sqlite-*
+data/catalog/snapshots

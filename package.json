@@ -8,10 +8,15 @@
     "build": "next build",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "data:init": "node scripts/catalog/run-catalog-command.mjs init",
+    "data:sync": "node scripts/catalog/run-catalog-command.mjs sync",
+    "data:status": "node scripts/catalog/run-catalog-command.mjs status",
+    "data:agent": "node scripts/catalog/run-catalog-command.mjs agent"
   },
   "dependencies": {
     "next": "^16.2.10",
+    "openai": "^6.45.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },
@@ -23,6 +28,7 @@
     "autoprefixer": "^10.5.2",
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.2.10",
+    "jiti": "^1.21.7",
     "postcss": "^8.5.16",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.9.2",

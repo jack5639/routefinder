@@ -3,12 +3,24 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { RouteDataPanel } from "@/components/route-data-panel";
 import { ScoreBar } from "@/components/score-bar";
+import { normaliseGeneratedRoadmap } from "@/lib/roadmaps/generated-roadmap";
 import { saveSavedRoadmap } from "@/lib/saved-roadmap-storage";
 import { scoreRoute } from "@/lib/scoring";
 import { useSavedQuizAnswers } from "@/lib/use-saved-quiz-answers";
 import { useSavedRoadmap } from "@/lib/use-saved-roadmap";
-import type { QuizAnswers, RoadmapStep, RoadmapTemplate, RouteOption, ScoredRoute } from "@/types";
+import type {
+  GeneratedRoadmap,
+  QuizAnswers,
+  RoadmapCheck,
+  RoadmapFollowUpAnswers,
+  RoadmapStep,
+  RoadmapTemplate,
+  RoadmapTrustLabel,
+  RouteOption,
+  ScoredRoute,
+} from "@/types";
 
 type PlanSectionId = "week" | "month" | "before" | "unlock" | "backup";
 
@@ -16,6 +28,10 @@ type PlanStep = {
   title: string;
   detail: string;
   note?: string;
+  whyItMatters?: string;
+  evidenceToGather?: string;
+  checks?: RoadmapCheck[];
+  trustLabels?: RoadmapTrustLabel[];
 };
 
 type PlanSection = {
@@ -199,6 +215,7 @@ function buildPlanSections(
   scored: ScoredRoute | null,
   answers: QuizAnswers | null,
 ): PlanSection[] {
+  // Custom roadmap generation can replace this template assembly later.
   const weekStep = findTemplateStep(roadmap, ["this week", "next week", "next 2 weeks"], 0);
   const monthStep = findTemplateStep(roadmap, ["this month", "4 weeks", "6 weeks", "this term"], 1);
   const beforeStep = findTemplateStep(roadmap, ["before", "applications", "applying", "enrolment", "final choices"], 2);
@@ -303,6 +320,43 @@ function buildPlanSections(
   ];
 }
 
+function getGeneratedSectionStyleId(sectionId: GeneratedRoadmap["sections"][number]["id"]): PlanSectionId {
+  if (sectionId === "this-week") {
+    return "week";
+  }
+
+  if (sectionId === "this-month") {
+    return "month";
+  }
+
+  if (sectionId === "before-applying") {
+    return "before";
+  }
+
+  if (sectionId === "unlock-options") {
+    return "unlock";
+  }
+
+  return "backup";
+}
+
+function buildGeneratedPlanSections(generatedRoadmap: GeneratedRoadmap): PlanSection[] {
+  return generatedRoadmap.sections.map((section) => ({
+    id: getGeneratedSectionStyleId(section.id),
+    title: section.title,
+    summary: section.summary,
+    steps: section.tasks.map((task) => ({
+      title: task.title,
+      detail: task.detail,
+      note: task.timeframe,
+      whyItMatters: task.whyItMatters,
+      evidenceToGather: task.evidenceToGather,
+      checks: task.checks,
+      trustLabels: task.trustLabels,
+    })),
+  }));
+}
+
 function formatSavedAt(savedAt: string) {
   const savedDate = new Date(savedAt);
 
@@ -325,10 +379,54 @@ function ProfileChip({ label, value }: { label: string; value: string }) {
   );
 }
 
+function TrustLabelChip({ label }: { label: RoadmapTrustLabel }) {
+  const labelClass =
+    label === "Needs checking"
+      ? "bg-[#ffe0d8] text-ink"
+      : label === "Based on your quiz"
+        ? "bg-mint text-ink"
+        : label === "Based on demo route data"
+          ? "bg-sky text-ink"
+          : "bg-ink text-white";
+
+  return <span className={`rounded-full px-3 py-1 text-[0.68rem] font-black ${labelClass}`}>{label}</span>;
+}
+
+function FollowUpField({
+  id,
+  label,
+  value,
+  placeholder,
+  onChange,
+}: {
+  id: keyof RoadmapFollowUpAnswers;
+  label: string;
+  value: string;
+  placeholder: string;
+  onChange: (id: keyof RoadmapFollowUpAnswers, value: string) => void;
+}) {
+  return (
+    <label className="block text-sm font-black text-ink" htmlFor={`roadmap-${id}`}>
+      {label}
+      <input
+        id={`roadmap-${id}`}
+        value={value}
+        onChange={(event) => onChange(id, event.target.value)}
+        placeholder={placeholder}
+        className="mt-2 min-h-12 w-full rounded-lg border-2 border-ink/10 bg-white px-3 py-3 text-sm font-semibold text-ink outline-none transition focus:border-leaf"
+      />
+    </label>
+  );
+}
+
 export function RoadmapView({ route, roadmap }: { route: RouteOption; roadmap: RoadmapTemplate }) {
   const answers = useSavedQuizAnswers();
   const savedRoadmap = useSavedRoadmap();
   const [saveMessage, setSaveMessage] = useState("");
+  const [generatedRoadmap, setGeneratedRoadmap] = useState<GeneratedRoadmap | null>(null);
+  const [generationStatus, setGenerationStatus] = useState<"idle" | "generating" | "generated" | "fallback" | "error">("idle");
+  const [generationMessage, setGenerationMessage] = useState("");
+  const [followUps, setFollowUps] = useState<RoadmapFollowUpAnswers>({});
 
   const scored = useMemo(() => {
     if (!answers) {
@@ -338,52 +436,161 @@ export function RoadmapView({ route, roadmap }: { route: RouteOption; roadmap: R
     return scoreRoute(route, answers);
   }, [answers, route]);
 
-  const planSections = useMemo(() => buildPlanSections(route, roadmap, scored, answers), [answers, roadmap, route, scored]);
+  const savedGeneratedRoadmap = savedRoadmap?.routeId === route.id ? savedRoadmap.generatedRoadmap : undefined;
+  const activeGeneratedRoadmap = generatedRoadmap ?? savedGeneratedRoadmap ?? null;
+
+  const planSections = useMemo(
+    () =>
+      activeGeneratedRoadmap
+        ? buildGeneratedPlanSections(activeGeneratedRoadmap)
+        : buildPlanSections(route, roadmap, scored, answers),
+    [activeGeneratedRoadmap, answers, roadmap, route, scored],
+  );
   const isSaved = savedRoadmap?.routeId === route.id;
+  const hasUnsavedGeneratedRoadmap =
+    Boolean(activeGeneratedRoadmap) && (!isSaved || savedRoadmap?.generatedRoadmap?.generatedAt !== activeGeneratedRoadmap?.generatedAt);
   const savedAtLabel = isSaved ? formatSavedAt(savedRoadmap.savedAt) : "";
   const saveHint = isSaved
-    ? `Saved on this device${savedAtLabel ? ` at ${savedAtLabel}` : ""}.`
+    ? hasUnsavedGeneratedRoadmap
+      ? "This custom roadmap is ready to save on this device."
+      : `Saved on this device${savedAtLabel ? ` at ${savedAtLabel}` : ""}.`
     : savedRoadmap
       ? "Saving this roadmap will replace the roadmap currently saved on this device."
       : "Save one roadmap locally so it is easy to return to after a refresh.";
 
+  function updateFollowUp(id: keyof RoadmapFollowUpAnswers, value: string) {
+    setFollowUps((current) => ({
+      ...current,
+      [id]: value,
+    }));
+  }
+
   function handleSaveRoadmap() {
-    const saved = saveSavedRoadmap(route.id);
+    const saved = saveSavedRoadmap(route.id, activeGeneratedRoadmap ?? undefined);
+
+    if (!saved) {
+      return;
+    }
+
     const timestamp = formatSavedAt(saved.savedAt);
 
     setSaveMessage(
       savedRoadmap && savedRoadmap.routeId !== route.id
         ? `Saved. This replaced the previous saved roadmap${timestamp ? ` at ${timestamp}` : ""}.`
-        : `Saved on this device${timestamp ? ` at ${timestamp}` : ""}.`,
+        : activeGeneratedRoadmap
+          ? `Saved custom roadmap on this device${timestamp ? ` at ${timestamp}` : ""}.`
+          : `Saved on this device${timestamp ? ` at ${timestamp}` : ""}.`,
     );
+  }
+
+  async function handleGenerateRoadmap() {
+    if (!answers) {
+      setGenerationStatus("fallback");
+      setGenerationMessage("Complete the quiz to generate a custom roadmap. The template roadmap is still available.");
+      return;
+    }
+
+    setGenerationStatus("generating");
+    setGenerationMessage("Generating a custom roadmap...");
+
+    try {
+      const response = await fetch("/api/roadmaps/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          routeId: route.id,
+          answers,
+          followUps,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        roadmap?: unknown;
+        message?: unknown;
+      } | null;
+
+      if (!response.ok || !payload?.ok) {
+        setGenerationStatus("fallback");
+        setGenerationMessage(
+          typeof payload?.message === "string"
+            ? payload.message
+            : "The template roadmap is being used because custom generation did not complete.",
+        );
+        return;
+      }
+
+      const nextRoadmap = normaliseGeneratedRoadmap(payload.roadmap, {
+        routeId: route.id,
+        backupOptions: route.backupOptions,
+      });
+
+      if (!nextRoadmap) {
+        setGenerationStatus("error");
+        setGenerationMessage("The generated roadmap did not pass local checks, so the template roadmap is still shown.");
+        return;
+      }
+
+      setGeneratedRoadmap(nextRoadmap);
+      setGenerationStatus("generated");
+      setGenerationMessage("Custom roadmap ready. Keep the checks visible before acting on it.");
+      setSaveMessage("");
+    } catch {
+      setGenerationStatus("fallback");
+      setGenerationMessage("Custom generation failed in this browser session. The template roadmap is still available.");
+    }
   }
 
   return (
     <AppShell>
       <section className="mx-auto max-w-4xl">
         <p className="text-sm font-black uppercase tracking-wide text-leaf">Personal action plan</p>
-        <h1 className="mt-3 text-3xl font-black leading-tight text-ink sm:text-5xl">{roadmap.heading}</h1>
+        <h1 className="mt-3 text-3xl font-black leading-tight text-ink sm:text-5xl">
+          {activeGeneratedRoadmap?.headline ?? roadmap.heading}
+        </h1>
         <p className="mt-3 max-w-3xl text-base leading-7 text-ink/75">
-          {roadmap.overview} The steps below use the saved quiz profile on this device where possible, and they stay cautious about
-          outcomes.
+          {activeGeneratedRoadmap
+            ? `${activeGeneratedRoadmap.profileSummary} ${activeGeneratedRoadmap.confidenceNote}`
+            : `${roadmap.overview} The steps below use the saved quiz profile on this device where possible, and they stay cautious about outcomes.`}
         </p>
 
-        <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="mt-4 rounded-lg border border-ink/10 bg-sky/70 px-4 py-3 text-sm font-semibold leading-6 text-ink/75">
+          <span className="font-black text-ink">{activeGeneratedRoadmap ? "Custom roadmap: " : "Template roadmap: "}</span>
+          {activeGeneratedRoadmap
+            ? "This AI-generated plan passed local schema and safety checks, using the saved quiz, route scores, and demo route data."
+            : "This plan is built from demo templates and stays available when custom generation is skipped or unavailable."}
+          {!answers ? " Opening a route directly still works; completing the quiz makes the checks more personal." : null}
+        </div>
+
+        <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           <button
             type="button"
             onClick={handleSaveRoadmap}
-            disabled={isSaved}
+            disabled={isSaved && !hasUnsavedGeneratedRoadmap}
             className={`inline-flex min-h-12 items-center justify-center rounded-full px-5 py-3 text-sm font-black transition sm:w-auto ${
-              isSaved ? "cursor-default bg-leaf text-white" : "bg-ink text-white hover:bg-leaf"
+              isSaved && !hasUnsavedGeneratedRoadmap ? "cursor-default bg-leaf text-white" : "bg-ink text-white hover:bg-leaf"
             }`}
           >
-            {isSaved ? "Saved on this device" : savedRoadmap ? "Replace saved roadmap" : "Save roadmap"}
+            {isSaved && !hasUnsavedGeneratedRoadmap
+              ? "Saved on this device"
+              : isSaved && hasUnsavedGeneratedRoadmap
+                ? "Save custom roadmap"
+                : savedRoadmap
+                  ? "Replace saved roadmap"
+                  : "Save roadmap"}
           </button>
           <Link
             href="/saved-roadmap"
             className="inline-flex min-h-12 items-center justify-center rounded-full border border-ink/15 bg-white px-5 py-3 text-sm font-black text-ink transition hover:bg-mint sm:w-auto"
           >
             View saved roadmap
+          </Link>
+          <Link
+            href="/parent-summary"
+            className="inline-flex min-h-12 items-center justify-center rounded-full border border-ink/15 bg-white px-5 py-3 text-sm font-black text-ink transition hover:bg-mint sm:w-auto"
+          >
+            Parent summary
           </Link>
           <Link
             href="/results"
@@ -397,6 +604,84 @@ export function RoadmapView({ route, roadmap }: { route: RouteOption; roadmap: R
           <span className="font-black text-ink">Save status: </span>
           <span aria-live="polite">{saveMessage || saveHint}</span>
         </div>
+
+        <section className="mt-5 rounded-lg border border-ink/10 bg-white p-4 shadow-soft sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-wide text-leaf">Make this roadmap sharper</p>
+              <h2 className="mt-2 text-xl font-black text-ink">Add a few planning details.</h2>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <TrustLabelChip label="Based on your quiz" />
+              <TrustLabelChip label="Needs checking" />
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <FollowUpField
+              id="deadlinePressure"
+              label="Deadline pressure"
+              value={followUps.deadlinePressure ?? ""}
+              placeholder="e.g. applying this autumn, no deadline yet"
+              onChange={updateFollowUp}
+            />
+            <FollowUpField
+              id="weeklyTime"
+              label="Weekly time"
+              value={followUps.weeklyTime ?? ""}
+              placeholder="e.g. 2 hours, weekends, not sure"
+              onChange={updateFollowUp}
+            />
+            <FollowUpField
+              id="supportNeeds"
+              label="Support needs"
+              value={followUps.supportNeeds ?? ""}
+              placeholder="e.g. travel help, study support, confidence"
+              onChange={updateFollowUp}
+            />
+            <FollowUpField
+              id="existingEvidence"
+              label="Existing evidence"
+              value={followUps.existingEvidence ?? ""}
+              placeholder="e.g. project, placement, CV, portfolio"
+              onChange={updateFollowUp}
+            />
+          </div>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <button
+              type="button"
+              onClick={handleGenerateRoadmap}
+              disabled={generationStatus === "generating" || !answers}
+              className="inline-flex min-h-12 items-center justify-center rounded-full bg-ink px-5 py-3 text-sm font-black text-white transition hover:bg-leaf disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto"
+            >
+              {generationStatus === "generating"
+                ? "Generating..."
+                : activeGeneratedRoadmap
+                  ? "Regenerate custom roadmap"
+                  : "Generate custom roadmap"}
+            </button>
+            <p
+              aria-live="polite"
+              className={`rounded-lg px-4 py-3 text-sm font-bold leading-6 ${
+                generationStatus === "generated"
+                  ? "bg-mint text-ink"
+                  : generationStatus === "error"
+                    ? "bg-[#ffe0d8] text-ink"
+                    : "bg-oat text-ink/65"
+              }`}
+            >
+              {generationMessage ||
+                (activeGeneratedRoadmap
+                  ? "Loaded the custom roadmap saved on this device."
+                  : answers
+                    ? "Template roadmap is shown until a custom roadmap is generated."
+                    : "Complete the quiz to generate a custom roadmap.")}
+            </p>
+          </div>
+        </section>
+      </section>
+
+      <section className="mx-auto mt-6 max-w-4xl">
+        <RouteDataPanel route={route} />
       </section>
 
       <section className="mx-auto mt-6 grid max-w-4xl gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -455,6 +740,34 @@ export function RoadmapView({ route, roadmap }: { route: RouteOption; roadmap: R
         </div>
       </section>
 
+      {activeGeneratedRoadmap ? (
+        <section className="mx-auto mt-5 grid max-w-4xl gap-4 lg:grid-cols-2">
+          <article className="rounded-lg border border-ink/10 bg-white p-4 shadow-soft sm:p-5">
+            <p className="text-xs font-black uppercase tracking-wide text-leaf">Checks to keep visible</p>
+            <div className="mt-3 space-y-3">
+              {activeGeneratedRoadmap.sourceWarnings.map((warning) => (
+                <div key={`${warning.label}-${warning.detail}`} className="rounded-lg bg-oat px-4 py-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <h2 className="text-sm font-black text-ink">{warning.label}</h2>
+                    <TrustLabelChip label={warning.trustLabel} />
+                  </div>
+                  <p className="mt-2 text-sm font-semibold leading-6 text-ink/70">{warning.detail}</p>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <article className="rounded-lg border border-ink/10 bg-white p-4 shadow-soft sm:p-5">
+            <p className="text-xs font-black uppercase tracking-wide text-leaf">Custom watch-outs</p>
+            <ul className="mt-3 list-disc space-y-2 pl-5 text-sm font-semibold leading-6 text-ink/72">
+              {activeGeneratedRoadmap.watchOuts.map((watchOut) => (
+                <li key={watchOut}>{watchOut}</li>
+              ))}
+            </ul>
+          </article>
+        </section>
+      ) : null}
+
       <section className="mx-auto mt-7 max-w-4xl">
         <div className="relative grid gap-4">
           <div className="absolute bottom-8 left-5 top-8 w-1 rounded-full bg-leaf/20 sm:left-7" />
@@ -480,7 +793,39 @@ export function RoadmapView({ route, roadmap }: { route: RouteOption; roadmap: R
                           <h3 className="text-base font-black text-ink">{step.title}</h3>
                           {step.note ? <p className="text-xs font-black uppercase text-ink/45">{step.note}</p> : null}
                         </div>
+                        {step.trustLabels?.length ? (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {step.trustLabels.map((label) => (
+                              <TrustLabelChip key={`${section.id}-${step.title}-${label}`} label={label} />
+                            ))}
+                          </div>
+                        ) : null}
                         <p className="mt-1 text-sm font-semibold leading-6 text-ink/70">{step.detail}</p>
+                        {step.whyItMatters ? (
+                          <p className="mt-2 rounded-lg bg-white/60 px-3 py-2 text-sm font-semibold leading-6 text-ink/70">
+                            <span className="font-black text-ink">Why it matters: </span>
+                            {step.whyItMatters}
+                          </p>
+                        ) : null}
+                        {step.evidenceToGather ? (
+                          <p className="mt-2 rounded-lg bg-white/60 px-3 py-2 text-sm font-semibold leading-6 text-ink/70">
+                            <span className="font-black text-ink">Evidence to gather: </span>
+                            {step.evidenceToGather}
+                          </p>
+                        ) : null}
+                        {step.checks?.length ? (
+                          <div className="mt-2 grid gap-2">
+                            {step.checks.map((check) => (
+                              <div key={`${step.title}-${check.label}`} className="rounded-lg border border-ink/10 bg-white/75 px-3 py-2">
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                  <p className="text-sm font-black text-ink">{check.label}</p>
+                                  <TrustLabelChip label={check.trustLabel} />
+                                </div>
+                                <p className="mt-1 text-sm font-semibold leading-6 text-ink/70">{check.detail}</p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     ))}
                   </div>

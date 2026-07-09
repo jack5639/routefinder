@@ -1,5 +1,8 @@
 import Link from "next/link";
-import type { ScoredRoute } from "@/types";
+import { RouteDataPanel } from "@/components/route-data-panel";
+import { RouteOpportunities } from "@/components/route-opportunities";
+import { routeFeedbackActions } from "@/lib/scoring";
+import type { RouteFeedbackActionId, RouteFeedbackEntry, ScoredRoute } from "@/types";
 
 function ScorePill({ label, value }: { label: string; value: number }) {
   return (
@@ -28,7 +31,85 @@ function DetailList({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-export function RouteCard({ route }: { route: ScoredRoute }) {
+function FeedbackNudge({ route }: { route: ScoredRoute }) {
+  if (!route.feedbackAdjustment) {
+    return null;
+  }
+
+  const { activeActionLabels, delta, originalTotalScore, reasons } = route.feedbackAdjustment;
+  const deltaLabel = delta > 0 ? `+${delta}` : String(delta);
+
+  return (
+    <div className="mt-3 rounded-lg bg-sky px-3 py-2 text-xs font-semibold leading-5 text-ink/75">
+      <p>
+        <span className="font-black text-ink">Feedback nudge: </span>
+        {delta === 0 ? "kept near the same score" : `${deltaLabel} from ${originalTotalScore} to ${route.totalScore}`}.
+      </p>
+      {activeActionLabels.length ? <p className="mt-1">Active here: {activeActionLabels.join(", ")}.</p> : null}
+      {reasons.length ? <p className="mt-1">{reasons[0]}</p> : null}
+    </div>
+  );
+}
+
+function RouteFeedbackControls({
+  feedbackEntry,
+  onFeedbackAction,
+  routeId,
+}: {
+  feedbackEntry?: RouteFeedbackEntry | null;
+  onFeedbackAction?: (routeId: string, actionId: RouteFeedbackActionId) => void;
+  routeId: string;
+}) {
+  if (!onFeedbackAction) {
+    return null;
+  }
+
+  const activeActionIds = new Set(feedbackEntry?.actionIds ?? []);
+
+  return (
+    <section className="mt-5 rounded-lg border border-ink/10 bg-oat p-3">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h3 className="text-sm font-black text-ink">Recommendation feedback</h3>
+          <p className="mt-1 text-xs font-semibold leading-5 text-ink/65">
+            Saved on this device. It only nudges the comparison order and does not decide for you.
+          </p>
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {routeFeedbackActions.map((action) => {
+          const active = activeActionIds.has(action.id);
+
+          return (
+            <button
+              key={action.id}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onFeedbackAction(routeId, action.id)}
+              className={`inline-flex min-h-10 items-center justify-center rounded-full border px-3 py-2 text-xs font-black transition ${
+                active
+                  ? "border-ink bg-ink text-white"
+                  : "border-ink/10 bg-white text-ink/72 hover:border-leaf/40 hover:bg-mint"
+              }`}
+            >
+              {action.label}
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+export function RouteCard({
+  feedbackEntry,
+  onFeedbackAction,
+  route,
+}: {
+  feedbackEntry?: RouteFeedbackEntry | null;
+  onFeedbackAction?: (routeId: string, actionId: RouteFeedbackActionId) => void;
+  route: ScoredRoute;
+}) {
   return (
     <article className="overflow-hidden rounded-lg border border-ink/10 bg-white shadow-soft">
       <div className="h-2 bg-coral" />
@@ -47,6 +128,8 @@ export function RouteCard({ route }: { route: ScoredRoute }) {
             <div className="text-3xl font-black">{route.totalScore}</div>
           </div>
         </div>
+
+        <FeedbackNudge route={route} />
 
         <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
           <ScorePill label="Fit score" value={route.scores.fit} />
@@ -82,6 +165,14 @@ export function RouteCard({ route }: { route: ScoredRoute }) {
             ))}
           </div>
         ) : null}
+
+        <div className="mt-5">
+          <RouteDataPanel route={route} compact />
+        </div>
+
+        <RouteOpportunities opportunities={route.opportunities} />
+
+        <RouteFeedbackControls feedbackEntry={feedbackEntry} onFeedbackAction={onFeedbackAction} routeId={route.id} />
 
         <Link
           href={`/roadmap/${route.id}`}

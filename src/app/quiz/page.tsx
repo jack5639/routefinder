@@ -2,13 +2,8 @@
 
 import { type KeyboardEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  clearQuizAnswers,
-  loadQuizProgressStep,
-  saveQuizAnswers,
-  saveQuizProgressStep,
-} from "@/lib/quiz-storage";
-import { useSavedQuizAnswers } from "@/lib/use-saved-quiz-answers";
+import { clearRoutefinderLocalState } from "@/lib/app-storage";
+import { loadQuizAnswers, loadQuizProgressStep, saveQuizAnswers, saveQuizProgressStep } from "@/lib/quiz-storage";
 import type { CurrentStage, DebtPreference, GradeBand, QuizAnswers, WorkStyle } from "@/types";
 
 type QuizFormAnswers = Omit<QuizAnswers, "targetCareer" | "targetCourse"> & {
@@ -28,13 +23,41 @@ type FlowStep = {
   helper: string;
 };
 
+const flowSteps: FlowStep[] = [
+  {
+    label: "Subjects and grades",
+    title: "What subjects are you currently studying, and what grades are you working at or predicted to get?",
+    helper: "A rough grade band is enough. This helps the demo compare feasibility without judging you.",
+  },
+  {
+    label: "Place and travel",
+    title: "Where are you based, and how far would you realistically travel or move for the right opportunity?",
+    helper: "Use the distance that would feel realistic on a normal week, not the absolute maximum once.",
+  },
+  {
+    label: "Day to day",
+    title: "When you imagine life after school or college, what would you like your day-to-day life to feel like?",
+    helper: "Pick the work styles and money pace that feel closest today. They can change later.",
+  },
+  {
+    label: "Interests",
+    title: "What are you naturally interested in, even if you're not sure it could become a job?",
+    helper: "Choose anything that keeps showing up in your attention, hobbies, lessons, or conversations.",
+  },
+  {
+    label: "Ideas and avoids",
+    title: "Is there anything you already think you might want to do, study, or avoid?",
+    helper: "This is optional. A messy idea or a clear avoid can both make the comparison more useful.",
+  },
+];
+
 const stageOptions: Option<CurrentStage>[] = [
-  { value: "GCSE", label: "GCSE", hint: "You are choosing what comes next." },
-  { value: "Year 12", label: "Year 12", hint: "You are exploring options early." },
-  { value: "Year 13", label: "Year 13", hint: "Applications or next steps are closer." },
-  { value: "College", label: "College", hint: "You are already on a course." },
-  { value: "Gap year", label: "Gap year", hint: "You are taking time to decide." },
-  { value: "Working", label: "Working", hint: "You are building experience now." },
+  { value: "GCSE", label: "GCSE" },
+  { value: "Year 12", label: "Year 12" },
+  { value: "Year 13", label: "Year 13" },
+  { value: "College", label: "College" },
+  { value: "Gap year", label: "Gap year" },
+  { value: "Working", label: "Working" },
 ];
 
 const subjectOptions: Option<string>[] = [
@@ -51,10 +74,31 @@ const subjectOptions: Option<string>[] = [
 ];
 
 const gradeOptions: Option<GradeBand>[] = [
-  { value: "needs-building", label: "Building up", hint: "Some grades may need support or a bridge route." },
-  { value: "steady", label: "Steady", hint: "Mostly on track for several routes." },
-  { value: "strong", label: "Strong", hint: "Competitive for many routes." },
+  { value: "needs-building", label: "Building up", hint: "Some routes may need support or a bridge." },
+  { value: "steady", label: "Steady", hint: "You are broadly on track for several routes." },
+  { value: "strong", label: "Strong", hint: "Many competitive routes may stay in view." },
   { value: "high", label: "High", hint: "High academic attainment." },
+];
+
+const travelPresets: Option<string>[] = [
+  { value: "30", label: "Stay local", hint: "Around 30 minutes" },
+  { value: "60", label: "Commute", hint: "Around 60 minutes" },
+  { value: "120", label: "Wider search", hint: "Around 2 hours" },
+  { value: "180", label: "Could move", hint: "Compare routes beyond daily travel" },
+];
+
+const workStyleOptions: Option<WorkStyle>[] = [
+  { value: "academic", label: "Ideas and study", hint: "Reading, theory, essays, research" },
+  { value: "practical", label: "Hands-on", hint: "Learning by doing and practising" },
+  { value: "creative", label: "Creative", hint: "Making, designing, experimenting" },
+  { value: "people", label: "People-focused", hint: "Helping, explaining, collaborating" },
+  { value: "technical", label: "Technical", hint: "Systems, tools, detail, logic" },
+];
+
+const debtOptions: Option<DebtPreference>[] = [
+  { value: "open", label: "Open to costs", hint: "Costs matter, but are not a blocker." },
+  { value: "some-concern", label: "Cost-aware", hint: "Costs need to feel clear." },
+  { value: "avoid", label: "Prefer lower debt", hint: "Lower-debt routes get more weight." },
 ];
 
 const interestOptions: Option<string>[] = [
@@ -70,94 +114,16 @@ const interestOptions: Option<string>[] = [
   { value: "writing", label: "Writing" },
 ];
 
-const constraintOptions: Option<string>[] = [
-  { value: "debt concern", label: "Keeping debt low" },
-  { value: "money pressure", label: "Needing to earn sooner" },
-  { value: "location limit", label: "Staying close to home" },
-  { value: "practical learning", label: "Avoiding mostly theory" },
-  { value: "grade-constrained", label: "Grades may need a bridge" },
+const avoidOptions: Option<string>[] = [
+  { value: "debt concern", label: "High debt" },
+  { value: "money pressure", label: "Waiting too long to earn" },
+  { value: "location limit", label: "Moving far away" },
+  { value: "practical learning", label: "Mostly theory" },
+  { value: "grade-constrained", label: "Grade pressure" },
   { value: "subject gap", label: "Missing a useful subject" },
-  { value: "needs structured study", label: "Needing clear structure" },
-  { value: "needs evidence of work", label: "Needing portfolio evidence" },
-  { value: "wants broad options", label: "Keeping broad options open" },
-  { value: "returning to study", label: "Returning to study" },
-];
-
-const debtOptions: Option<DebtPreference>[] = [
-  { value: "open", label: "Open to it", hint: "Costs matter, but they are not a blocker." },
-  { value: "some-concern", label: "Some concern", hint: "You want the costs to feel clear." },
-  { value: "avoid", label: "Prefer to avoid", hint: "Lower-debt routes should get extra weight." },
-];
-
-const workStyleOptions: Option<WorkStyle>[] = [
-  { value: "academic", label: "Academic", hint: "Reading, essays, theory, research" },
-  { value: "practical", label: "Practical", hint: "Learning by doing" },
-  { value: "creative", label: "Creative", hint: "Making, designing, experimenting" },
-  { value: "people", label: "People-focused", hint: "Helping, explaining, collaborating" },
-  { value: "technical", label: "Technical", hint: "Tools, systems, detail, logic" },
-];
-
-const flowSteps: FlowStep[] = [
-  {
-    label: "Stage",
-    title: "Where are you right now?",
-    helper: "Choose the closest match. It only helps with timing.",
-  },
-  {
-    label: "Subjects",
-    title: "What are you studying?",
-    helper: "Tap a few subjects or add your own course area.",
-  },
-  {
-    label: "Grades",
-    title: "Which grade band feels realistic?",
-    helper: "This is about planning, not judging.",
-  },
-  {
-    label: "Interests",
-    title: "What feels worth exploring?",
-    helper: "Pick anything that feels like it could matter.",
-  },
-  {
-    label: "Constraints",
-    title: "Anything the plan should work around?",
-    helper: "Pick any that matter, or leave none selected.",
-  },
-  {
-    label: "Career",
-    title: "Do you have a target career?",
-    helper: "Optional. A rough idea is enough.",
-  },
-  {
-    label: "Course",
-    title: "Do you have a target course?",
-    helper: "Optional. This can be a subject, course, or training area.",
-  },
-  {
-    label: "Location",
-    title: "Where should the search start?",
-    helper: "A town, city, or area is enough for this prototype.",
-  },
-  {
-    label: "Travel",
-    title: "How far could you travel?",
-    helper: "Set the longest normal journey you would consider.",
-  },
-  {
-    label: "Debt",
-    title: "How do you feel about debt?",
-    helper: "This helps compare lower-cost and higher-cost routes.",
-  },
-  {
-    label: "Earning",
-    title: "How important is earning soon?",
-    helper: "Move the slider toward the pace that feels right.",
-  },
-  {
-    label: "Style",
-    title: "How do you prefer to work?",
-    helper: "Choose one or more styles that usually suit you.",
-  },
+  { value: "needs structured study", label: "Loose structure" },
+  { value: "needs evidence of work", label: "Portfolio pressure" },
+  { value: "wants broad options", label: "Closing options too early" },
 ];
 
 const emptyAnswers: QuizFormAnswers = {
@@ -198,15 +164,32 @@ function formFromSavedAnswers(answers: QuizAnswers): QuizFormAnswers {
   };
 }
 
+function cleanList(values: string[]) {
+  const seen = new Set<string>();
+  const cleanValues: string[] = [];
+
+  values.forEach((value) => {
+    const cleanValue = value.trim().replace(/\s+/g, " ");
+    const key = cleanValue.toLowerCase();
+
+    if (cleanValue && !seen.has(key)) {
+      seen.add(key);
+      cleanValues.push(cleanValue);
+    }
+  });
+
+  return cleanValues;
+}
+
 function quizAnswersFromForm(answers: QuizFormAnswers): QuizAnswers {
   const targetCareer = answers.targetCareer.trim();
   const targetCourse = answers.targetCourse.trim();
 
   return {
     currentStage: answers.currentStage,
-    subjects: answers.subjects.map((subject) => subject.trim()).filter(Boolean),
+    subjects: cleanList(answers.subjects),
     predictedGrades: answers.predictedGrades,
-    interests: answers.interests,
+    interests: cleanList(answers.interests),
     ...(targetCareer ? { targetCareer } : {}),
     ...(targetCourse ? { targetCourse } : {}),
     location: answers.location.trim(),
@@ -214,12 +197,8 @@ function quizAnswersFromForm(answers: QuizFormAnswers): QuizAnswers {
     debtPreference: answers.debtPreference,
     earnSoon: answers.earnSoon,
     workStyles: answers.workStyles,
-    constraints: answers.constraints,
+    constraints: cleanList(answers.constraints),
   };
-}
-
-function toggleValue<T extends string>(values: T[], value: T) {
-  return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
 }
 
 function splitManualItems(value: string) {
@@ -230,36 +209,28 @@ function splitManualItems(value: string) {
 }
 
 function mergeUniqueItems(currentItems: string[], additions: string[]) {
-  const existing = new Set(currentItems.map((item) => item.toLowerCase()));
-  const nextItems = [...currentItems];
+  return cleanList([...currentItems, ...additions]);
+}
 
-  additions.forEach((item) => {
-    const key = item.toLowerCase();
-
-    if (!existing.has(key)) {
-      existing.add(key);
-      nextItems.push(item);
-    }
-  });
-
-  return nextItems;
+function toggleValue<T extends string>(values: T[], value: T) {
+  return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
 }
 
 function getStepMessage(stepIndex: number, answers: QuizFormAnswers) {
-  if (stepIndex === 1 && answers.subjects.length === 0) {
-    return "Add at least one subject or course area so the planner has something real to compare.";
+  if (stepIndex === 0 && answers.subjects.length === 0) {
+    return "Add at least one subject or course area so the planner has something concrete to compare.";
+  }
+
+  if (stepIndex === 1 && !answers.location.trim()) {
+    return "Add a town, city, or area. A rough location is enough for this demo.";
+  }
+
+  if (stepIndex === 2 && answers.workStyles.length === 0) {
+    return "Pick at least one day-to-day style. More than one is fine.";
   }
 
   if (stepIndex === 3 && answers.interests.length === 0) {
-    return "Pick at least one interest so route fit can respond to you.";
-  }
-
-  if (stepIndex === 7 && !answers.location.trim()) {
-    return "Add a town, city, or area. A rough location is enough.";
-  }
-
-  if (stepIndex === 11 && answers.workStyles.length === 0) {
-    return "Pick at least one work style. You can choose more than one.";
+    return "Pick at least one interest so fit can respond to what naturally catches your attention.";
   }
 
   return "";
@@ -270,19 +241,19 @@ function getFirstIncompleteStep(answers: QuizFormAnswers) {
   return invalidStep >= 0 ? invalidStep : flowSteps.length - 1;
 }
 
-function answerButtonClass(selected: boolean) {
-  return `min-h-20 w-full rounded-lg border-2 px-4 py-4 text-left shadow-sm transition duration-200 active:translate-y-0.5 ${
-    selected
-      ? "border-leaf bg-mint shadow-soft"
-      : "border-ink/10 bg-white hover:border-leaf/50 hover:bg-mint/40"
-  }`;
-}
-
 function chipButtonClass(selected: boolean) {
-  return `min-h-12 rounded-lg border-2 px-4 py-3 text-left text-sm font-black leading-5 transition duration-200 active:translate-y-0.5 sm:text-base ${
+  return `min-h-12 rounded-lg border-2 px-4 py-3 text-left text-sm font-black leading-5 transition active:translate-y-0.5 sm:text-base ${
     selected
       ? "border-leaf bg-ink text-white shadow-soft"
       : "border-ink/10 bg-white text-ink hover:border-leaf/50 hover:bg-mint/45"
+  }`;
+}
+
+function answerButtonClass(selected: boolean) {
+  return `min-h-20 rounded-lg border-2 px-4 py-4 text-left transition active:translate-y-0.5 ${
+    selected
+      ? "border-leaf bg-mint text-ink shadow-soft"
+      : "border-ink/10 bg-white text-ink hover:border-leaf/50 hover:bg-mint/40"
   }`;
 }
 
@@ -308,7 +279,7 @@ function OptionGrid<T extends string>({
             onClick={() => onSelect(option.value)}
             className={answerButtonClass(selected)}
           >
-            <span className="block break-words text-lg font-black leading-6 text-ink">{option.label}</span>
+            <span className="block break-words text-base font-black leading-6 sm:text-lg">{option.label}</span>
             {option.hint ? <span className="mt-2 block text-sm font-semibold leading-5 text-ink/65">{option.hint}</span> : null}
           </button>
         );
@@ -377,177 +348,125 @@ function SelectedPills({ values, onRemove }: { values: string[]; onRemove: (valu
   );
 }
 
-function WelcomeScreen({
-  savedAnswers,
-  onBegin,
-  onContinue,
-  onStartAgain,
+function TextInput({
+  id,
+  label,
+  value,
+  placeholder,
+  onChange,
 }: {
-  savedAnswers: QuizAnswers | null;
-  onBegin: () => void;
-  onContinue: () => void;
-  onStartAgain: () => void;
+  id: string;
+  label: string;
+  value: string;
+  placeholder: string;
+  onChange: (value: string) => void;
 }) {
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(220,238,255,0.95),transparent_34%),linear-gradient(135deg,#fbf8ef,#dff3e8_58%,#dceeff)] px-4 py-5 text-ink sm:px-6">
-      <section className="mx-auto flex min-h-[calc(100vh-2.5rem)] max-w-3xl flex-col justify-center">
-        <p className="text-sm font-black uppercase tracking-wide text-leaf">Routefinder</p>
-        <h1 className="mt-4 text-4xl font-black leading-tight sm:text-6xl">Let&apos;s build your route plan</h1>
-        <p className="mt-4 max-w-xl text-lg font-semibold leading-8 text-ink/70">
-          A few focused questions, then a calm comparison of possible education, training, and work routes.
-        </p>
-
-        <div className="mt-8 grid gap-3 sm:max-w-md">
-          {savedAnswers ? (
-            <>
-              <button
-                type="button"
-                onClick={onContinue}
-                className="inline-flex min-h-14 w-full items-center justify-center rounded-lg bg-ink px-5 py-4 text-base font-black text-white shadow-soft transition hover:bg-leaf"
-              >
-                Continue my plan
-              </button>
-              <button
-                type="button"
-                onClick={onStartAgain}
-                className="inline-flex min-h-14 w-full items-center justify-center rounded-lg border-2 border-ink/10 bg-white px-5 py-4 text-base font-black text-ink transition hover:border-leaf/50 hover:bg-mint"
-              >
-                Start again
-              </button>
-              <div className="rounded-lg border border-ink/10 bg-white/80 p-4">
-                <p className="text-xs font-black uppercase tracking-wide text-ink/45">Saved on this device</p>
-                <p className="mt-2 text-sm font-semibold leading-6 text-ink/70">
-                  {savedAnswers.currentStage}, {gradeLabels[savedAnswers.predictedGrades]} grades
-                  {savedAnswers.location ? `, ${savedAnswers.location}` : ""}.
-                </p>
-              </div>
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={onBegin}
-              className="inline-flex min-h-14 w-full items-center justify-center rounded-lg bg-ink px-5 py-4 text-base font-black text-white shadow-soft transition hover:bg-leaf"
-            >
-              Begin
-            </button>
-          )}
-        </div>
-
-        <p className="mt-5 max-w-md text-sm font-semibold leading-6 text-ink/60">
-          No account needed. Your answers stay in this browser for now.
-        </p>
-      </section>
-    </main>
+    <label className="block text-sm font-black text-ink" htmlFor={id}>
+      {label}
+      <input
+        id={id}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="mt-2 min-h-14 w-full rounded-lg border-2 border-ink/10 bg-white px-4 py-4 text-base font-semibold text-ink outline-none transition focus:border-leaf"
+      />
+    </label>
   );
 }
 
-function ProgressHeader({ currentStep, progress }: { currentStep: number; progress: number }) {
+function LoadingQuiz() {
   return (
-    <header className="sticky top-0 z-20 border-b border-ink/10 bg-[#fbf8ef]/94 px-4 py-4 backdrop-blur sm:px-6">
-      <div className="mx-auto max-w-3xl">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-xs font-black uppercase tracking-wide text-leaf">Routefinder</p>
-            <p className="mt-1 text-sm font-black text-ink">
-              Question {currentStep + 1} of {flowSteps.length}
-            </p>
-          </div>
-          <div className="rounded-lg bg-white px-3 py-2 text-sm font-black text-ink shadow-sm">{progress}%</div>
-        </div>
-        <div
-          role="progressbar"
-          aria-label="Quiz progress"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={progress}
-          className="mt-4 h-3 overflow-hidden rounded-full bg-white"
-        >
-          <div className="h-full rounded-full bg-leaf transition-all duration-300" style={{ width: `${progress}%` }} />
-        </div>
-      </div>
-    </header>
+    <main className="flex min-h-screen items-center justify-center bg-oat px-4 text-ink">
+      <p className="rounded-lg bg-white px-4 py-3 text-sm font-black shadow-soft">Opening your Routefinder quiz...</p>
+    </main>
   );
 }
 
 export default function QuizPage() {
   const router = useRouter();
-  const savedAnswers = useSavedQuizAnswers();
   const [answers, setAnswers] = useState<QuizFormAnswers>(emptyAnswers);
   const [currentStep, setCurrentStep] = useState(0);
-  const [flowStarted, setFlowStarted] = useState(false);
+  const [hasLoadedSavedState, setHasLoadedSavedState] = useState(false);
   const [stepMessage, setStepMessage] = useState("");
   const [subjectDraft, setSubjectDraft] = useState("");
+  const [interestDraft, setInterestDraft] = useState("");
   const current = flowSteps[currentStep];
   const progress = useMemo(() => Math.round(((currentStep + 1) / flowSteps.length) * 100), [currentStep]);
 
   useEffect(() => {
-    if (!flowStarted) {
+    const timer = window.setTimeout(() => {
+      const savedAnswers = loadQuizAnswers();
+
+      if (savedAnswers) {
+        const savedForm = formFromSavedAnswers(savedAnswers);
+        const savedStep = loadQuizProgressStep(flowSteps.length - 1);
+
+        setAnswers(savedForm);
+        setCurrentStep(savedStep ?? getFirstIncompleteStep(savedForm));
+      }
+
+      setHasLoadedSavedState(true);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedSavedState) {
       return;
     }
 
     saveQuizAnswers(quizAnswersFromForm(answers));
     saveQuizProgressStep(currentStep);
-  }, [answers, currentStep, flowStarted]);
+  }, [answers, currentStep, hasLoadedSavedState]);
 
   function updateAnswers(update: (currentAnswers: QuizFormAnswers) => QuizFormAnswers) {
     setAnswers((currentAnswers) => update(currentAnswers));
     setStepMessage("");
   }
 
-  function startNewFlow() {
-    setAnswers(emptyAnswers);
-    setCurrentStep(0);
-    setSubjectDraft("");
-    setStepMessage("");
-    setFlowStarted(true);
-  }
-
-  function continueSavedFlow() {
-    if (!savedAnswers) {
-      startNewFlow();
-      return;
-    }
-
-    const savedForm = formFromSavedAnswers(savedAnswers);
-    const savedStep = loadQuizProgressStep(flowSteps.length - 1);
-
-    setAnswers(savedForm);
-    setCurrentStep(savedStep ?? getFirstIncompleteStep(savedForm));
-    setSubjectDraft("");
-    setStepMessage("");
-    setFlowStarted(true);
-  }
-
-  function startAgain() {
-    clearQuizAnswers();
-    startNewFlow();
-  }
-
-  function addSubjectDraft() {
-    const additions = splitManualItems(subjectDraft);
+  function addDraftValue(kind: "subject" | "interest") {
+    const draft = kind === "subject" ? subjectDraft : interestDraft;
+    const additions = splitManualItems(draft);
 
     if (!additions.length) {
       return answers;
     }
 
-    const updatedAnswers = {
-      ...answers,
-      subjects: mergeUniqueItems(answers.subjects, additions),
-    };
+    const updatedAnswers =
+      kind === "subject"
+        ? { ...answers, subjects: mergeUniqueItems(answers.subjects, additions) }
+        : { ...answers, interests: mergeUniqueItems(answers.interests, additions) };
 
     setAnswers(updatedAnswers);
-    setSubjectDraft("");
     setStepMessage("");
+
+    if (kind === "subject") {
+      setSubjectDraft("");
+    } else {
+      setInterestDraft("");
+    }
+
     return updatedAnswers;
   }
 
-  function handleSubjectKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+  function handleDraftKeyDown(kind: "subject" | "interest", event: KeyboardEvent<HTMLInputElement>) {
     if (event.key !== "Enter") {
       return;
     }
 
     event.preventDefault();
-    addSubjectDraft();
+    addDraftValue(kind);
+  }
+
+  function startAgain() {
+    clearRoutefinderLocalState();
+    setAnswers(emptyAnswers);
+    setCurrentStep(0);
+    setSubjectDraft("");
+    setInterestDraft("");
+    setStepMessage("Started again. Saved quiz answers and the saved roadmap were cleared.");
   }
 
   function finishQuiz(nextAnswers: QuizFormAnswers) {
@@ -565,7 +484,8 @@ export default function QuizPage() {
   }
 
   function goNext() {
-    const answersToCheck = currentStep === 1 && subjectDraft.trim() ? addSubjectDraft() : answers;
+    const withSubjectDraft = currentStep === 0 && subjectDraft.trim() ? addDraftValue("subject") : answers;
+    const answersToCheck = currentStep === 3 && interestDraft.trim() ? addDraftValue("interest") : withSubjectDraft;
     const message = getStepMessage(currentStep, answersToCheck);
 
     if (message) {
@@ -585,249 +505,309 @@ export default function QuizPage() {
 
   function goBack() {
     setStepMessage("");
-
-    if (currentStep === 0) {
-      setFlowStarted(false);
-      return;
-    }
-
     setCurrentStep((step) => Math.max(step - 1, 0));
+  }
+
+  function renderManualEntry(kind: "subject" | "interest") {
+    const isSubject = kind === "subject";
+    const draft = isSubject ? subjectDraft : interestDraft;
+    const setDraft = isSubject ? setSubjectDraft : setInterestDraft;
+    const id = isSubject ? "subject-draft" : "interest-draft";
+
+    return (
+      <div className="rounded-lg border border-ink/10 bg-white p-3">
+        <label className="block text-sm font-black text-ink" htmlFor={id}>
+          {isSubject ? "Add another subject or course area" : "Add another interest"}
+        </label>
+        <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
+          <input
+            id={id}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => handleDraftKeyDown(kind, event)}
+            placeholder={isSubject ? "e.g. sociology, T Level digital" : "e.g. music, fixing things"}
+            className="min-h-[3.25rem] w-full rounded-lg border-2 border-ink/10 bg-oat px-4 py-3 text-base font-semibold text-ink outline-none transition focus:border-leaf"
+          />
+          <button
+            type="button"
+            onClick={() => addDraftValue(kind)}
+            className="min-h-[3.25rem] rounded-lg bg-ink px-4 py-3 text-sm font-black text-white transition hover:bg-leaf"
+          >
+            Add
+          </button>
+        </div>
+      </div>
+    );
   }
 
   function renderStep() {
     if (currentStep === 0) {
       return (
-        <OptionGrid
-          options={stageOptions}
-          selectedValue={answers.currentStage}
-          onSelect={(currentStage) => updateAnswers((draft) => ({ ...draft, currentStage }))}
-        />
-      );
-    }
+        <div className="space-y-6">
+          <section>
+            <p className="mb-3 text-sm font-black text-ink">I am currently in</p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {stageOptions.map((option) => {
+                const selected = answers.currentStage === option.value;
 
-    if (currentStep === 1) {
-      return (
-        <div className="space-y-5">
-          <MultiChipGrid
-            options={subjectOptions}
-            selectedValues={answers.subjects}
-            onToggle={(subject) => updateAnswers((draft) => ({ ...draft, subjects: toggleValue(draft.subjects, subject) }))}
-          />
-          <div className="rounded-lg border border-ink/10 bg-white p-3">
-            <label className="block text-sm font-black text-ink" htmlFor="subject-draft">
-              Add another subject or course area
-            </label>
-            <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
-              <input
-                id="subject-draft"
-                value={subjectDraft}
-                onChange={(event) => setSubjectDraft(event.target.value)}
-                onKeyDown={handleSubjectKeyDown}
-                placeholder="e.g. sociology, T Level digital"
-                className="min-h-[3.25rem] w-full rounded-lg border-2 border-ink/10 bg-oat px-4 py-3 text-base font-semibold text-ink outline-none transition focus:border-leaf"
-              />
-              <button
-                type="button"
-                onClick={addSubjectDraft}
-                className="min-h-[3.25rem] rounded-lg bg-ink px-4 py-3 text-sm font-black text-white transition hover:bg-leaf"
-              >
-                Add
-              </button>
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => updateAnswers((draft) => ({ ...draft, currentStage: option.value }))}
+                    className={chipButtonClass(selected)}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
             </div>
-          </div>
+          </section>
+
+          <section>
+            <p className="mb-3 text-sm font-black text-ink">Subjects or course areas</p>
+            <MultiChipGrid
+              options={subjectOptions}
+              selectedValues={answers.subjects}
+              onToggle={(subject) => updateAnswers((draft) => ({ ...draft, subjects: toggleValue(draft.subjects, subject) }))}
+            />
+          </section>
+
+          {renderManualEntry("subject")}
           <SelectedPills
             values={answers.subjects}
             onRemove={(subject) =>
               updateAnswers((draft) => ({ ...draft, subjects: draft.subjects.filter((item) => item !== subject) }))
             }
           />
+
+          <section>
+            <p className="mb-3 text-sm font-black text-ink">Grade band</p>
+            <OptionGrid
+              options={gradeOptions}
+              selectedValue={answers.predictedGrades}
+              onSelect={(predictedGrades) => updateAnswers((draft) => ({ ...draft, predictedGrades }))}
+            />
+          </section>
+        </div>
+      );
+    }
+
+    if (currentStep === 1) {
+      return (
+        <div className="space-y-6">
+          <TextInput
+            id="location"
+            label="Town, city, or area"
+            value={answers.location}
+            onChange={(location) => updateAnswers((draft) => ({ ...draft, location }))}
+            placeholder="e.g. Manchester"
+          />
+
+          <section>
+            <p className="mb-3 text-sm font-black text-ink">A realistic travel or move range</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {travelPresets.map((preset) => {
+                const presetMinutes = Number(preset.value);
+                const selected = answers.maxTravelMinutes === presetMinutes;
+
+                return (
+                  <button
+                    key={preset.value}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => updateAnswers((draft) => ({ ...draft, maxTravelMinutes: presetMinutes }))}
+                    className={answerButtonClass(selected)}
+                  >
+                    <span className="block text-base font-black text-ink">{preset.label}</span>
+                    <span className="mt-2 block text-sm font-semibold text-ink/65">{preset.hint}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-ink/10 bg-white p-4 shadow-sm">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <p className="text-sm font-black text-ink/60">Maximum normal journey</p>
+                <p className="mt-2 text-5xl font-black leading-none text-ink">{answers.maxTravelMinutes}</p>
+              </div>
+              <p className="pb-1 text-sm font-black uppercase tracking-wide text-ink/50">minutes</p>
+            </div>
+            <input
+              type="range"
+              min={10}
+              max={180}
+              step={5}
+              value={answers.maxTravelMinutes}
+              onChange={(event) =>
+                updateAnswers((draft) => ({ ...draft, maxTravelMinutes: Number(event.target.value) }))
+              }
+              className="mt-7 w-full accent-leaf"
+              aria-label="Maximum travel or move range in minutes"
+            />
+            <div className="mt-3 flex justify-between text-xs font-black uppercase tracking-wide text-ink/45">
+              <span>Nearby</span>
+              <span>Could move</span>
+            </div>
+          </section>
         </div>
       );
     }
 
     if (currentStep === 2) {
       return (
-        <OptionGrid
-          options={gradeOptions}
-          selectedValue={answers.predictedGrades}
-          onSelect={(predictedGrades) => updateAnswers((draft) => ({ ...draft, predictedGrades }))}
-        />
+        <div className="space-y-6">
+          <section>
+            <p className="mb-3 text-sm font-black text-ink">A day that sounds more like you</p>
+            <MultiChipGrid
+              options={workStyleOptions}
+              selectedValues={answers.workStyles}
+              onToggle={(workStyle) =>
+                updateAnswers((draft) => ({ ...draft, workStyles: toggleValue(draft.workStyles, workStyle) }))
+              }
+            />
+          </section>
+
+          <section className="rounded-lg border border-ink/10 bg-white p-4 shadow-sm">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <p className="text-sm font-black text-ink/60">Earning soon</p>
+                <p className="mt-2 text-5xl font-black leading-none text-ink">{answers.earnSoon}</p>
+              </div>
+              <p className="pb-1 text-sm font-black text-leaf">{earnSoonLabels[answers.earnSoon]}</p>
+            </div>
+            <input
+              type="range"
+              min={1}
+              max={5}
+              step={1}
+              value={answers.earnSoon}
+              onChange={(event) => updateAnswers((draft) => ({ ...draft, earnSoon: Number(event.target.value) }))}
+              className="mt-7 w-full accent-leaf"
+              aria-label="How important earning soon feels"
+            />
+            <div className="mt-3 flex justify-between text-xs font-black uppercase tracking-wide text-ink/45">
+              <span>Can wait</span>
+              <span>Soon matters</span>
+            </div>
+          </section>
+
+          <section>
+            <p className="mb-3 text-sm font-black text-ink">How costs or debt feel right now</p>
+            <OptionGrid
+              options={debtOptions}
+              selectedValue={answers.debtPreference}
+              onSelect={(debtPreference) => updateAnswers((draft) => ({ ...draft, debtPreference }))}
+            />
+          </section>
+        </div>
       );
     }
 
     if (currentStep === 3) {
       return (
-        <MultiChipGrid
-          options={interestOptions}
-          selectedValues={answers.interests}
-          onToggle={(interest) => updateAnswers((draft) => ({ ...draft, interests: toggleValue(draft.interests, interest) }))}
-        />
+        <div className="space-y-5">
+          <MultiChipGrid
+            options={interestOptions}
+            selectedValues={answers.interests}
+            onToggle={(interest) => updateAnswers((draft) => ({ ...draft, interests: toggleValue(draft.interests, interest) }))}
+          />
+          {renderManualEntry("interest")}
+          <SelectedPills
+            values={answers.interests}
+            onRemove={(interest) =>
+              updateAnswers((draft) => ({ ...draft, interests: draft.interests.filter((item) => item !== interest) }))
+            }
+          />
+        </div>
       );
     }
 
-    if (currentStep === 4) {
-      return (
-        <div className="grid gap-3">
+    return (
+      <div className="space-y-6">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextInput
+            id="target-career"
+            label="Something I might want to do"
+            value={answers.targetCareer}
+            onChange={(targetCareer) => updateAnswers((draft) => ({ ...draft, targetCareer }))}
+            placeholder="e.g. software developer, nurse, not sure yet"
+          />
+          <TextInput
+            id="target-course"
+            label="Something I might want to study"
+            value={answers.targetCourse}
+            onChange={(targetCourse) => updateAnswers((draft) => ({ ...draft, targetCourse }))}
+            placeholder="e.g. computer science, health and social care"
+          />
+        </div>
+
+        <section>
+          <p className="mb-3 text-sm font-black text-ink">Things to handle carefully or avoid</p>
           <button
             type="button"
             aria-pressed={answers.constraints.length === 0}
             onClick={() => updateAnswers((draft) => ({ ...draft, constraints: [] }))}
-            className={answerButtonClass(answers.constraints.length === 0)}
+            className={`${answerButtonClass(answers.constraints.length === 0)} mb-3 w-full`}
           >
-            <span className="block break-words text-lg font-black leading-6 text-ink">Nothing major right now</span>
-            <span className="mt-2 block text-sm font-semibold leading-5 text-ink/65">You can still compare backup routes.</span>
+            <span className="block text-base font-black text-ink">Nothing major right now</span>
+            <span className="mt-2 block text-sm font-semibold text-ink/65">The route cards will still show watch-outs.</span>
           </button>
           <MultiChipGrid
-            options={constraintOptions}
+            options={avoidOptions}
             selectedValues={answers.constraints}
             onToggle={(constraint) =>
               updateAnswers((draft) => ({ ...draft, constraints: toggleValue(draft.constraints, constraint) }))
             }
           />
-        </div>
-      );
-    }
-
-    if (currentStep === 5) {
-      return (
-        <label className="block text-sm font-black text-ink" htmlFor="target-career">
-          Career idea
-          <input
-            id="target-career"
-            value={answers.targetCareer}
-            onChange={(event) => updateAnswers((draft) => ({ ...draft, targetCareer: event.target.value }))}
-            placeholder="e.g. software developer"
-            className="mt-3 min-h-14 w-full rounded-lg border-2 border-ink/10 bg-white px-4 py-4 text-lg font-semibold text-ink outline-none transition focus:border-leaf"
-          />
-        </label>
-      );
-    }
-
-    if (currentStep === 6) {
-      return (
-        <label className="block text-sm font-black text-ink" htmlFor="target-course">
-          Course or training idea
-          <input
-            id="target-course"
-            value={answers.targetCourse}
-            onChange={(event) => updateAnswers((draft) => ({ ...draft, targetCourse: event.target.value }))}
-            placeholder="e.g. computer science"
-            className="mt-3 min-h-14 w-full rounded-lg border-2 border-ink/10 bg-white px-4 py-4 text-lg font-semibold text-ink outline-none transition focus:border-leaf"
-          />
-        </label>
-      );
-    }
-
-    if (currentStep === 7) {
-      return (
-        <label className="block text-sm font-black text-ink" htmlFor="location">
-          Town, city, or area
-          <input
-            id="location"
-            value={answers.location}
-            onChange={(event) => updateAnswers((draft) => ({ ...draft, location: event.target.value }))}
-            placeholder="e.g. Manchester"
-            className="mt-3 min-h-14 w-full rounded-lg border-2 border-ink/10 bg-white px-4 py-4 text-lg font-semibold text-ink outline-none transition focus:border-leaf"
-          />
-        </label>
-      );
-    }
-
-    if (currentStep === 8) {
-      return (
-        <div className="rounded-lg border border-ink/10 bg-white p-4 shadow-sm">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <p className="text-sm font-black text-ink/60">Maximum travel time</p>
-              <p className="mt-2 text-5xl font-black leading-none text-ink">{answers.maxTravelMinutes}</p>
-            </div>
-            <p className="pb-1 text-sm font-black uppercase tracking-wide text-ink/50">minutes</p>
-          </div>
-          <input
-            type="range"
-            min={10}
-            max={150}
-            step={5}
-            value={answers.maxTravelMinutes}
-            onChange={(event) =>
-              updateAnswers((draft) => ({ ...draft, maxTravelMinutes: Number(event.target.value) }))
-            }
-            className="mt-7 w-full accent-leaf"
-            aria-label="Maximum travel time in minutes"
-          />
-          <div className="mt-3 flex justify-between text-xs font-black uppercase tracking-wide text-ink/45">
-            <span>Nearby</span>
-            <span>Wider search</span>
-          </div>
-        </div>
-      );
-    }
-
-    if (currentStep === 9) {
-      return (
-        <OptionGrid
-          options={debtOptions}
-          selectedValue={answers.debtPreference}
-          onSelect={(debtPreference) => updateAnswers((draft) => ({ ...draft, debtPreference }))}
-        />
-      );
-    }
-
-    if (currentStep === 10) {
-      return (
-        <div className="rounded-lg border border-ink/10 bg-white p-4 shadow-sm">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <p className="text-sm font-black text-ink/60">Earning soon</p>
-              <p className="mt-2 text-5xl font-black leading-none text-ink">{answers.earnSoon}</p>
-            </div>
-            <p className="pb-1 text-sm font-black text-leaf">{earnSoonLabels[answers.earnSoon]}</p>
-          </div>
-          <input
-            type="range"
-            min={1}
-            max={5}
-            step={1}
-            value={answers.earnSoon}
-            onChange={(event) => updateAnswers((draft) => ({ ...draft, earnSoon: Number(event.target.value) }))}
-            className="mt-7 w-full accent-leaf"
-            aria-label="How important earning soon is"
-          />
-          <div className="mt-3 flex justify-between text-xs font-black uppercase tracking-wide text-ink/45">
-            <span>Can wait</span>
-            <span>Soon matters</span>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <MultiChipGrid
-        options={workStyleOptions}
-        selectedValues={answers.workStyles}
-        onToggle={(workStyle) =>
-          updateAnswers((draft) => ({ ...draft, workStyles: toggleValue(draft.workStyles, workStyle) }))
-        }
-      />
+        </section>
+      </div>
     );
   }
 
-  if (!flowStarted) {
-    return (
-      <WelcomeScreen
-        savedAnswers={savedAnswers}
-        onBegin={startNewFlow}
-        onContinue={continueSavedFlow}
-        onStartAgain={startAgain}
-      />
-    );
+  if (!hasLoadedSavedState) {
+    return <LoadingQuiz />;
   }
 
   return (
     <main className="min-h-screen bg-[linear-gradient(145deg,#fbf8ef,#dceeff_48%,#dff3e8)] text-ink">
-      <ProgressHeader currentStep={currentStep} progress={progress} />
+      <header className="sticky top-0 z-20 border-b border-ink/10 bg-[#fbf8ef]/95 px-4 py-4 backdrop-blur sm:px-6">
+        <div className="mx-auto max-w-3xl">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-wide text-leaf">Routefinder demo</p>
+              <p className="mt-1 text-sm font-black text-ink">
+                Question {currentStep + 1} of {flowSteps.length}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="rounded-lg bg-white px-3 py-2 text-sm font-black text-ink shadow-sm">{progress}%</div>
+              <button
+                type="button"
+                onClick={startAgain}
+                className="rounded-lg border border-ink/10 bg-white px-3 py-2 text-xs font-black text-ink transition hover:bg-[#ffe0d8]"
+              >
+                Start again
+              </button>
+            </div>
+          </div>
+          <div
+            role="progressbar"
+            aria-label="Quiz progress"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={progress}
+            className="mt-4 h-3 overflow-hidden rounded-full bg-white"
+          >
+            <div className="h-full rounded-full bg-leaf transition-all duration-300" style={{ width: `${progress}%` }} />
+          </div>
+        </div>
+      </header>
 
-      <section className="mx-auto flex min-h-[calc(100vh-6.5rem)] w-full max-w-3xl flex-col justify-center px-4 pb-32 pt-7 sm:px-6">
+      <section className="mx-auto flex min-h-[calc(100vh-6.5rem)] w-full max-w-3xl flex-col px-4 pb-32 pt-7 sm:px-6">
         <div key={currentStep} className="motion-reduce:animate-none animate-[questionIn_260ms_ease-out]">
           <p className="text-sm font-black uppercase tracking-wide text-leaf">{current.label}</p>
           <h1 className="mt-3 text-3xl font-black leading-tight text-ink sm:text-5xl">{current.title}</h1>
@@ -841,7 +821,8 @@ export default function QuizPage() {
               stepMessage ? "border border-coral/30 bg-[#fff0eb] text-ink" : "bg-white/75 text-ink/60"
             }`}
           >
-            {stepMessage || "Saved on this device as you go."}
+            {stepMessage ||
+              `Saved on this device. Current grade band: ${gradeLabels[answers.predictedGrades]}; travel: ${answers.maxTravelMinutes} min.`}
           </div>
         </div>
       </section>
@@ -851,7 +832,8 @@ export default function QuizPage() {
           <button
             type="button"
             onClick={goBack}
-            className="inline-flex min-h-[3.25rem] flex-1 items-center justify-center rounded-lg border-2 border-ink/10 bg-white px-4 py-3 text-sm font-black text-ink transition hover:border-leaf/45 hover:bg-mint"
+            disabled={currentStep === 0}
+            className="inline-flex min-h-[3.25rem] flex-1 items-center justify-center rounded-lg border-2 border-ink/10 bg-white px-4 py-3 text-sm font-black text-ink transition hover:border-leaf/45 hover:bg-mint disabled:cursor-not-allowed disabled:opacity-45"
           >
             Back
           </button>
