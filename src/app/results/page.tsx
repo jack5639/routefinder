@@ -106,12 +106,8 @@ export default function ResultsPage() {
         </h1>
         <p className="mt-3 text-base leading-7 text-ink/75">
           These categories are comparison aids, not final answers. They use your saved quiz answers to make fit, feasibility, constraints,
-<<<<<<< HEAD
           and confidence easier to talk through. Real data is used when the local catalogue has synced; otherwise the demo fallback remains
           visible.
-=======
-          and confidence easier to talk through. Route recommendations use mock demo data until real source-backed data is added.
->>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
         </p>
 
         <div className="mt-5">

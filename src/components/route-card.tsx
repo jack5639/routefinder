@@ -1,12 +1,8 @@
 import Link from "next/link";
 import { RouteDataPanel } from "@/components/route-data-panel";
-<<<<<<< HEAD
 import { RouteOpportunities } from "@/components/route-opportunities";
 import { routeFeedbackActions } from "@/lib/scoring";
 import type { RouteFeedbackActionId, RouteFeedbackEntry, ScoredRoute } from "@/types";
-=======
-import type { ScoredRoute } from "@/types";
->>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
 
 function ScorePill({ label, value }: { label: string; value: number }) {
   return (
@@ -174,13 +170,10 @@ export function RouteCard({
           <RouteDataPanel route={route} compact />
         </div>
 
-<<<<<<< HEAD
         <RouteOpportunities opportunities={route.opportunities} />
 
         <RouteFeedbackControls feedbackEntry={feedbackEntry} onFeedbackAction={onFeedbackAction} routeId={route.id} />
 
-=======
->>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
         <Link
           href={`/roadmap/${route.id}`}
           className="mt-5 inline-flex w-full items-center justify-center rounded-full bg-ink px-4 py-3 text-sm font-black text-white transition hover:bg-leaf sm:w-auto"

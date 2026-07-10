@@ -1,22 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { mockRoutes } from "@/data/routes/mock-routes";
-<<<<<<< HEAD
 import { testPersonaProfiles, testPersonas } from "@/data/test-personas/personas";
 import type { QuizAnswers } from "@/types";
 import {
   applySingleSimulatorChange,
   buildDecisionBoardWithFeedback,
-=======
-import { testPersonas } from "@/data/test-personas/personas";
-import type { QuizAnswers } from "@/types";
-import {
-  applySingleSimulatorChange,
->>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
   buildDecisionBoard,
   buildSimulatorComparison,
   compareRouteScores,
   countSimulatorChangedFactors,
-<<<<<<< HEAD
   createEmptyRouteFeedbackState,
   rankRoutes,
   rankRoutesWithFeedback,
@@ -52,11 +44,6 @@ function hasOverlap<T>(left: Iterable<T>, right: Iterable<T>) {
   const rightSet = new Set(right);
   return Array.from(left).some((item) => rightSet.has(item));
 }
-=======
-  rankRoutes,
-  scoreRoute,
-} from "./scoring";
->>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
 
 describe("scoring", () => {
   it("returns ranked routes with explainable scores", () => {
@@ -112,11 +99,7 @@ describe("scoring", () => {
   });
 
   it("builds one-change-at-a-time simulator scenarios", () => {
-<<<<<<< HEAD
     const baseline = personaAnswers("software-developer-debt-averse");
-=======
-    const baseline = testPersonas[0];
->>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
     const changed = applySingleSimulatorChange(baseline, "travel", {
       maxTravelMinutes: 120,
       predictedGrades: "high",
@@ -219,11 +202,7 @@ describe("scoring", () => {
   });
 
   it("keeps decision board routes unique across categories", () => {
-<<<<<<< HEAD
     const board = buildDecisionBoard(mockRoutes, personaAnswers("creative-media-portfolio"));
-=======
-    const board = buildDecisionBoard(mockRoutes, testPersonas[2]);
->>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
     const routeIds = board.flatMap((group) => group.routes.map((route) => route.id));
 
     expect(new Set(routeIds).size).toBe(routeIds.length);
