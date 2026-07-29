@@ -1,0 +1,15 @@
+node_modules
+.pnpm-store
+.next
+*.tsbuildinfo
+out
+dist
+coverage
+.env
+.env.local
+.env.*.local
+*.log
+*.zip
+data/catalog/*.sqlite
+data/catalog/*.sqlite-*
+data/catalog/snapshots
