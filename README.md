@@ -1,86 +1,115 @@
-# Future Route Planner
+# Routefinder
 
-A mobile-first MVP prototype for helping 16-19-year-olds compare education, apprenticeship, college, work-based, and portfolio routes without presenting advice as certain or final.
+Routefinder is a mobile-first application-readiness workspace for English late-Year-12 and early-Year-13 students preparing university, higher-apprenticeship, and degree-apprenticeship applications.
 
-## What is included
+The commercial direction focuses first on technology, engineering, business, and finance. It helps students compare real opportunities, understand published requirements, map their genuine evidence, see gaps and uncertainty, and complete useful actions before deadlines.
 
-- Sign-in/onboarding placeholder at `/`
-- Full-screen five-question route-builder quiz at `/quiz`
-<<<<<<< HEAD
-- Mock recommendation results with local feedback/reranking at `/results`
-- Compatibility roadmap landing at `/roadmap`
-=======
-- Mock recommendation results at `/results`
->>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
-- Route roadmaps at `/roadmap/[routeId]`
-- One saved local roadmap at `/saved-roadmap`
-- One-change-at-a-time what-if simulator at `/simulator`
-- Copyable parent-friendly summary at `/parent-summary`
-<<<<<<< HEAD
-- Compatibility summary redirect at `/summary`
-=======
->>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
-- Pure deterministic scoring logic in `src/lib/scoring`
-- Mock route data in `src/data/routes`
-- Mock roadmap templates in `src/data/roadmaps`
-- 10 test personas with broad expected ranking behavior in `src/data/test-personas`
-- Practical product docs in `docs/`
-- Vitest unit tests for scoring, storage, personas, and route feedback
+Routefinder is a decision and preparation aid. It does not predict admission, replace an adviser, or write applications for students.
 
-## Route map
+## Repository status
 
-Canonical app routes:
+This repository currently contains a working prototype and the foundations of a source-backed catalogue. It is not yet the paid commercial product described in the strategy.
 
-- `/`
-- `/quiz`
-- `/results`
-- `/roadmap/[routeId]`
-- `/saved-roadmap`
-- `/simulator`
-- `/parent-summary`
+Implemented today:
 
-Compatibility routes from the original MVP brief:
+- five-question browser-saved route quiz;
+- deterministic route-family scoring and recommendation feedback;
+- results decision board;
+- route roadmaps, one saved roadmap, simulator, and parent summary;
+- clearly labelled demo route families;
+- local SQLite catalogue, source runs, snapshots, freshness status, and API boundaries;
+- prototype UCAS, Discover Uni, and Find an Apprenticeship source adapters;
+- structured AI roadmap generation with a template fallback;
+- Vitest coverage for scoring, storage, catalogue, personas, and generation boundaries.
 
-- `/roadmap` opens the saved route-specific roadmap when one exists, otherwise it points users back to results/saved roadmap.
-- `/summary` redirects to `/parent-summary`.
+Important limitations:
 
-## Run locally
+- saved student state is browser-only and device-specific;
+- authentication, payments, entitlements, secure user storage, evidence mapping, and application tracking are not implemented;
+- source adapters are prototypes and are not approved commercial data integrations;
+- demo records must not be presented as verified opportunities;
+- the current total-score UI is a migration target, not the intended commercial recommendation model.
 
-Prerequisites:
+## Start here
+
+Before making changes, read [AGENTS.md](AGENTS.md) and the [documentation index](docs/README.md). They define required reading, sources of truth, safety constraints, and completion criteria.
+
+The final product and commercial direction is in [docs/product-decisions.md](docs/product-decisions.md).
+
+## Requirements
 
 - Node.js 20.19+, 22.13+, or 24+
-- pnpm 11+
+- pnpm 11
 
-Install dependencies:
+The project uses the package manager pinned in `package.json`.
+
+## Local setup
 
 ```bash
 pnpm install
-```
-
-Start the development server:
-
-```bash
+cp .env.example .env.local
 pnpm dev
 ```
 
-Then open the local URL printed by Next.js, usually:
+Open the local URL printed by Next.js, normally `http://localhost:3000`.
 
-```text
-http://localhost:3000
-```
+`OPENAI_API_KEY` is optional. Without it, generated roadmaps use the deterministic template fallback.
 
-## Check the project
+## Quality checks
 
 ```bash
 pnpm test
 pnpm lint
 pnpm build
+pnpm docs:check
 ```
 
-## Notes
+Run the relevant checks before handing off a change. `docs:check` validates required documents, internal links, the documentation index, retired duplicate plans, conflict markers, and `.env.example` coverage. If the environment prevents a check, report that limitation rather than implying success.
 
-<<<<<<< HEAD
-This scaffold intentionally does not include real authentication, payments, live UCAS/GOV.UK/apprenticeship APIs, account storage, source-backed route data, or custom/generated roadmaps yet. Route data is mocked so the scoring, feedback, and UX can be shaped before adding live integrations.
-=======
-This scaffold intentionally does not include real authentication, payments, live UCAS/GOV.UK/apprenticeship APIs, account storage, source-backed route data, or custom/generated roadmaps yet. Route data is mocked so the scoring and UX can be shaped before adding live integrations.
->>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
+## Catalogue commands
+
+```bash
+pnpm data:init
+pnpm data:sync
+pnpm data:status
+pnpm data:agent
+```
+
+The catalogue defaults to `data/catalog/catalog.sqlite`. Local databases and snapshots are ignored by Git.
+
+The current source adapters fetch and parse public pages for prototype validation. Do not operate them as the commercial data pipeline. The target data policy requires approved APIs, open datasets with attribution, licensed data where necessary, provenance, freshness, conflict handling, and human review for high-impact requirements.
+
+## Current route map
+
+| Route | Current purpose |
+| --- | --- |
+| `/` | Prototype landing and onboarding |
+| `/quiz` | Browser-saved route quiz |
+| `/results` | Deterministic comparison board |
+| `/roadmap/[routeId]` | Route-specific prototype roadmap |
+| `/saved-roadmap` | Locally saved roadmap |
+| `/simulator` | One-factor comparison simulator |
+| `/parent-summary` | Locally generated parent-friendly summary |
+| `/roadmap` | Compatibility entry to saved or selected roadmap |
+| `/summary` | Compatibility redirect to parent summary |
+
+Do not remove compatibility routes without an explicit migration decision.
+
+## Repository structure
+
+```text
+src/app/                    Next.js pages and API route handlers
+src/components/             Reusable UI components
+src/data/routes/            Clearly labelled demo route families
+src/data/roadmaps/          Prototype deterministic roadmap templates
+src/data/test-personas/     Broad recommendation test personas
+src/lib/scoring/            Pure scoring and recommendation logic
+src/lib/catalog/            Catalogue ingestion, SQLite, queries, and freshness
+src/lib/*-storage.ts        Prototype browser-persistence boundaries
+scripts/catalog/            Catalogue command entry point
+docs/                       Product, architecture, recommendation, and ADR sources of truth
+```
+
+## Documentation
+
+Use [docs/README.md](docs/README.md) to find the authoritative document for a task. Do not introduce a second product plan, backlog, or architecture description when an existing source of truth can be updated.

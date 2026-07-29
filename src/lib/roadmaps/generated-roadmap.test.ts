@@ -87,7 +87,7 @@ describe("generated roadmap validation", () => {
   });
 
   it("rejects missing required fields", () => {
-    const roadmap = makeRoadmap() as Record<string, unknown>;
+    const roadmap = makeRoadmap() as unknown as Record<string, unknown>;
     delete roadmap.sections;
 
     expect(normaliseGeneratedRoadmap(roadmap, { routeId: route.id })).toBeNull();
@@ -152,6 +152,8 @@ describe("roadmap generation input", () => {
 
     expect(input.generatedAt).toBe("2026-07-09T10:00:00.000Z");
     expect(input.route.id).toBe(route.id);
+    expect(input.route.requirementEvidenceStatus).toBe(route.requirementEvidenceStatus);
+    expect(input.scoring.eligibility).toBe(scored.scores.eligibility);
     expect(input.quizProfile.targetCareer).toBe(defaultQuizAnswers.targetCareer);
     expect(input.scoring.watchOuts.length).toBeGreaterThan(0);
     expect(input.followUps.weeklyTime).toBe("2 hours after college");

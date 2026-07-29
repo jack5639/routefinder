@@ -466,11 +466,7 @@ export function RoadmapView({ route, roadmap }: { route: RouteOption; roadmap: R
   }
 
   function handleSaveRoadmap() {
-<<<<<<< HEAD
     const saved = saveSavedRoadmap(route.id, activeGeneratedRoadmap ?? undefined);
-=======
-    const saved = saveSavedRoadmap(route.id);
->>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
 
     if (!saved) {
       return;
@@ -560,15 +556,10 @@ export function RoadmapView({ route, roadmap }: { route: RouteOption; roadmap: R
         </p>
 
         <div className="mt-4 rounded-lg border border-ink/10 bg-sky/70 px-4 py-3 text-sm font-semibold leading-6 text-ink/75">
-<<<<<<< HEAD
           <span className="font-black text-ink">{activeGeneratedRoadmap ? "Custom roadmap: " : "Template roadmap: "}</span>
           {activeGeneratedRoadmap
             ? "This AI-generated plan passed local schema and safety checks, using the saved quiz, route scores, and demo route data."
             : "This plan is built from demo templates and stays available when custom generation is skipped or unavailable."}
-=======
-          <span className="font-black text-ink">Template roadmap: </span>
-          This plan is built from demo templates until custom roadmap generation is added.
->>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
           {!answers ? " Opening a route directly still works; completing the quiz makes the checks more personal." : null}
         </div>
 

@@ -30,6 +30,8 @@ export type CatalogueFreshness = "fresh" | "stale" | "missing" | "error" | "demo
 
 export type SourceKind = "demo" | "derived-family" | "university-course" | "apprenticeship-vacancy";
 
+export type RequirementEvidenceStatus = "known" | "missing" | "conflicting";
+
 export interface SourceRun {
   id: number;
   source: CatalogSource;
@@ -129,23 +131,20 @@ export interface RouteOption {
   title: string;
   type: RouteType;
   summary: string;
-<<<<<<< HEAD
   sourceKind?: SourceKind;
-=======
->>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
   sourceUrl?: string;
   applyUrl?: string;
   deadline?: string;
   lastChecked?: string;
   evidenceLevel?: "demo" | "partial" | "source-backed";
-<<<<<<< HEAD
+  /** Describes whether entry requirements can be used for an eligibility comparison. */
+  requirementEvidenceStatus?: RequirementEvidenceStatus;
+  requirementSources?: string[];
   opportunityCount?: number;
   lastSyncedAt?: string;
   freshnessStatus?: CatalogueFreshness;
   sourceRecordIds?: string[];
   opportunities?: RouteOpportunity[];
-=======
->>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
   costOrPaySummary?: string;
   bursaryOrSupportSummary?: string;
   relatedInterests: string[];
@@ -165,6 +164,8 @@ export interface RouteOption {
 
 export interface ScoreBreakdown {
   fit: number;
+  eligibility: number;
+  readiness: number;
   feasibility: number;
   constraint: number;
   confidence: number;
@@ -210,6 +211,7 @@ export interface ScoredRoute extends RouteOption {
     nextSteps: string[];
     backupOptions: string[];
     missingInfo: string[];
+    confidenceLimitations: string[];
   };
 }
 

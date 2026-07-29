@@ -1,22 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { mockRoutes } from "@/data/routes/mock-routes";
-<<<<<<< HEAD
 import { testPersonaProfiles, testPersonas } from "@/data/test-personas/personas";
 import type { QuizAnswers } from "@/types";
 import {
   applySingleSimulatorChange,
   buildDecisionBoardWithFeedback,
-=======
-import { testPersonas } from "@/data/test-personas/personas";
-import type { QuizAnswers } from "@/types";
-import {
-  applySingleSimulatorChange,
->>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
   buildDecisionBoard,
   buildSimulatorComparison,
   compareRouteScores,
   countSimulatorChangedFactors,
-<<<<<<< HEAD
   createEmptyRouteFeedbackState,
   rankRoutes,
   rankRoutesWithFeedback,
@@ -52,11 +44,6 @@ function hasOverlap<T>(left: Iterable<T>, right: Iterable<T>) {
   const rightSet = new Set(right);
   return Array.from(left).some((item) => rightSet.has(item));
 }
-=======
-  rankRoutes,
-  scoreRoute,
-} from "./scoring";
->>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
 
 describe("scoring", () => {
   it("returns ranked routes with explainable scores", () => {
@@ -86,6 +73,49 @@ describe("scoring", () => {
     }
   });
 
+  it("keeps unknown requirements in view while lowering confidence", () => {
+    const sourceBackedRoute = {
+      ...mockRoutes[0],
+      evidenceLevel: "source-backed" as const,
+      sourceKind: "derived-family" as const,
+      freshnessStatus: "fresh" as const,
+      requirementEvidenceStatus: "known" as const,
+    };
+    const missingRequirements = {
+      ...sourceBackedRoute,
+      requirementEvidenceStatus: "missing" as const,
+    };
+    const answers = personaAnswers("software-developer-debt-averse");
+    const known = scoreRoute(sourceBackedRoute, answers);
+    const unknown = scoreRoute(missingRequirements, answers);
+
+    expect(unknown.totalScore).toBeGreaterThan(0);
+    expect(unknown.scores.confidence).toBeLessThan(known.scores.confidence);
+    expect(unknown.explanation.watchOuts.join(" ")).toContain("not currently evidenced");
+  });
+
+  it("reduces confidence for stale data and conflicting requirement sources", () => {
+    const freshRoute = {
+      ...mockRoutes[0],
+      evidenceLevel: "source-backed" as const,
+      sourceKind: "derived-family" as const,
+      freshnessStatus: "fresh" as const,
+      requirementEvidenceStatus: "known" as const,
+    };
+    const staleRoute = { ...freshRoute, freshnessStatus: "stale" as const };
+    const conflictingRoute = { ...freshRoute, requirementEvidenceStatus: "conflicting" as const };
+    const answers = personaAnswers("software-developer-debt-averse");
+
+    const fresh = scoreRoute(freshRoute, answers);
+    const stale = scoreRoute(staleRoute, answers);
+    const conflicting = scoreRoute(conflictingRoute, answers);
+
+    expect(stale.scores.confidence).toBeLessThan(fresh.scores.confidence);
+    expect(conflicting.scores.confidence).toBeLessThan(fresh.scores.confidence);
+    expect(conflicting.scores.eligibility).toBeLessThan(fresh.scores.eligibility);
+    expect(conflicting.explanation.confidenceLimitations.join(" ")).toContain("disagree");
+  });
+
   it("changes route ranking when answers change", () => {
     const technicalRoutes = rankRoutes(mockRoutes, personaAnswers("software-developer-debt-averse"), 5);
     const healthRoutes = rankRoutes(mockRoutes, personaAnswers("healthcare-location-constrained"), 5);
@@ -112,11 +142,7 @@ describe("scoring", () => {
   });
 
   it("builds one-change-at-a-time simulator scenarios", () => {
-<<<<<<< HEAD
     const baseline = personaAnswers("software-developer-debt-averse");
-=======
-    const baseline = testPersonas[0];
->>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
     const changed = applySingleSimulatorChange(baseline, "travel", {
       maxTravelMinutes: 120,
       predictedGrades: "high",
@@ -219,11 +245,7 @@ describe("scoring", () => {
   });
 
   it("keeps decision board routes unique across categories", () => {
-<<<<<<< HEAD
     const board = buildDecisionBoard(mockRoutes, personaAnswers("creative-media-portfolio"));
-=======
-    const board = buildDecisionBoard(mockRoutes, testPersonas[2]);
->>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
     const routeIds = board.flatMap((group) => group.routes.map((route) => route.id));
 
     expect(new Set(routeIds).size).toBe(routeIds.length);

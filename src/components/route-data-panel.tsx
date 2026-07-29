@@ -6,7 +6,6 @@ const evidenceLabels: Record<NonNullable<RouteOption["evidenceLevel"]>, string> 
   "source-backed": "Source-backed",
 };
 
-<<<<<<< HEAD
 const freshnessLabels: Record<NonNullable<RouteOption["freshnessStatus"]>, string> = {
   fresh: "Fresh",
   stale: "Stale",
@@ -15,8 +14,6 @@ const freshnessLabels: Record<NonNullable<RouteOption["freshnessStatus"]>, strin
   demo: "Demo",
 };
 
-=======
->>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
 function isHttpUrl(value: string | undefined): value is string {
   return Boolean(value && /^https?:\/\//.test(value));
 }
@@ -32,7 +29,6 @@ function DataRow({ label, value }: { label: string; value: string }) {
 
 export function RouteDataPanel({ route, compact = false }: { route: RouteOption; compact?: boolean }) {
   const hasDataRows =
-<<<<<<< HEAD
     route.deadline ||
     route.lastChecked ||
     route.lastSyncedAt ||
@@ -41,9 +37,6 @@ export function RouteDataPanel({ route, compact = false }: { route: RouteOption;
     route.evidenceLevel ||
     route.freshnessStatus ||
     typeof route.opportunityCount === "number";
-=======
-    route.deadline || route.lastChecked || route.costOrPaySummary || route.bursaryOrSupportSummary || route.evidenceLevel;
->>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
   const hasApplyLink = isHttpUrl(route.applyUrl) && route.applyUrl !== route.sourceUrl;
   const hasLinks = isHttpUrl(route.sourceUrl) || hasApplyLink;
 
@@ -55,13 +48,9 @@ export function RouteDataPanel({ route, compact = false }: { route: RouteOption;
     <section className={compact ? "border-t border-ink/10 pt-4" : "rounded-lg border border-ink/10 bg-sky/60 p-4"}>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-<<<<<<< HEAD
           <p className="text-xs font-black uppercase tracking-wide text-leaf">
             {route.evidenceLevel === "source-backed" ? "Source-backed route data" : "Demo route data"}
           </p>
-=======
-          <p className="text-xs font-black uppercase tracking-wide text-leaf">Demo route data</p>
->>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
           <h3 className={`${compact ? "text-base" : "text-lg"} mt-1 font-black leading-tight text-ink`}>
             Check details before acting.
           </h3>
@@ -73,16 +62,12 @@ export function RouteDataPanel({ route, compact = false }: { route: RouteOption;
 
       <div className={`mt-3 grid gap-2 ${compact ? "" : "sm:grid-cols-2"}`}>
         {route.deadline ? <DataRow label="Deadline" value={route.deadline} /> : null}
-<<<<<<< HEAD
         {route.lastSyncedAt ? <DataRow label="Catalogue last synced" value={route.lastSyncedAt} /> : null}
         {!route.lastSyncedAt && route.lastChecked ? <DataRow label="Demo last reviewed" value={route.lastChecked} /> : null}
         {route.freshnessStatus ? <DataRow label="Freshness" value={freshnessLabels[route.freshnessStatus]} /> : null}
         {typeof route.opportunityCount === "number" ? (
           <DataRow label="Source-backed examples" value={`${route.opportunityCount} matched record${route.opportunityCount === 1 ? "" : "s"}`} />
         ) : null}
-=======
-        {route.lastChecked ? <DataRow label="Demo last reviewed" value={route.lastChecked} /> : null}
->>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
         {route.costOrPaySummary ? <DataRow label="Cost or pay" value={route.costOrPaySummary} /> : null}
         {route.bursaryOrSupportSummary ? <DataRow label="Support" value={route.bursaryOrSupportSummary} /> : null}
       </div>

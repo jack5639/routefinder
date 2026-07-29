@@ -8,6 +8,8 @@ export type RoadmapGenerationInput = {
     type: RouteOption["type"];
     summary: string;
     evidenceLevel: RouteOption["evidenceLevel"];
+    requirementEvidenceStatus: RouteOption["requirementEvidenceStatus"];
+    freshnessStatus: RouteOption["freshnessStatus"];
     lastChecked: string | undefined;
     deadline: string | undefined;
     sourceUrl: string | undefined;
@@ -44,6 +46,8 @@ export type RoadmapGenerationInput = {
   scoring: {
     totalScore: number;
     fit: number;
+    eligibility: number;
+    readiness: number;
     feasibility: number;
     constraint: number;
     confidence: number;
@@ -52,6 +56,7 @@ export type RoadmapGenerationInput = {
     nextSteps: string[];
     backupOptions: string[];
     missingInfo: string[];
+    confidenceLimitations: string[];
   };
   followUps: RoadmapFollowUpAnswers;
 };
@@ -116,6 +121,8 @@ export function buildRoadmapGenerationInput({
       type: route.type,
       summary: route.summary,
       evidenceLevel: route.evidenceLevel,
+      requirementEvidenceStatus: route.requirementEvidenceStatus,
+      freshnessStatus: route.freshnessStatus,
       lastChecked: route.lastChecked,
       deadline: route.deadline,
       sourceUrl: route.sourceUrl,
@@ -152,6 +159,8 @@ export function buildRoadmapGenerationInput({
     scoring: {
       totalScore: scored.totalScore,
       fit: scored.scores.fit,
+      eligibility: scored.scores.eligibility,
+      readiness: scored.scores.readiness,
       feasibility: scored.scores.feasibility,
       constraint: scored.scores.constraint,
       confidence: scored.scores.confidence,
@@ -160,6 +169,7 @@ export function buildRoadmapGenerationInput({
       nextSteps: [...scored.explanation.nextSteps],
       backupOptions: [...scored.explanation.backupOptions],
       missingInfo: [...scored.explanation.missingInfo],
+      confidenceLimitations: [...scored.explanation.confidenceLimitations],
     },
     followUps: normaliseRoadmapFollowUpAnswers(followUps),
   };

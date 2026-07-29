@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
-import { mockRoutes } from "@/data/routes/mock-routes";
+import { getCatalogueRoute } from "@/lib/catalog/queries";
 import { normaliseQuizAnswers } from "@/lib/quiz-storage";
 import { generatedRoadmapJsonSchema, validateGeneratedRoadmap } from "@/lib/roadmaps/generated-roadmap";
 import {
@@ -97,7 +97,7 @@ export async function POST(request: Request) {
   }
 
   const routeId = typeof body.routeId === "string" ? body.routeId.trim() : "";
-  const route = mockRoutes.find((item) => item.id === routeId);
+  const route = getCatalogueRoute(routeId);
   const answers = normaliseQuizAnswers(body.answers);
   const followUps = normaliseRoadmapFollowUpAnswers(body.followUps);
 

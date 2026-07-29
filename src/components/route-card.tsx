@@ -1,12 +1,8 @@
 import Link from "next/link";
 import { RouteDataPanel } from "@/components/route-data-panel";
-<<<<<<< HEAD
 import { RouteOpportunities } from "@/components/route-opportunities";
 import { routeFeedbackActions } from "@/lib/scoring";
 import type { RouteFeedbackActionId, RouteFeedbackEntry, ScoredRoute } from "@/types";
-=======
-import type { ScoredRoute } from "@/types";
->>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
 
 function ScorePill({ label, value }: { label: string; value: number }) {
   return (
@@ -137,8 +133,8 @@ export function RouteCard({
 
         <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
           <ScorePill label="Fit score" value={route.scores.fit} />
-          <ScorePill label="Feasibility score" value={route.scores.feasibility} />
-          <ScorePill label="Constraint score" value={route.scores.constraint} />
+          <ScorePill label="Eligibility evidence" value={route.scores.eligibility} />
+          <ScorePill label="Readiness score" value={route.scores.readiness} />
           <ScorePill label="Confidence score" value={route.scores.confidence} />
         </div>
 
@@ -170,17 +166,21 @@ export function RouteCard({
           </div>
         ) : null}
 
+        {route.explanation.confidenceLimitations.length ? (
+          <div className="mt-3 rounded-lg bg-oat px-4 py-3 text-sm font-semibold leading-6 text-ink/75">
+            <span className="font-black text-ink">Confidence limits: </span>
+            {route.explanation.confidenceLimitations.join(" ")}
+          </div>
+        ) : null}
+
         <div className="mt-5">
           <RouteDataPanel route={route} compact />
         </div>
 
-<<<<<<< HEAD
         <RouteOpportunities opportunities={route.opportunities} />
 
         <RouteFeedbackControls feedbackEntry={feedbackEntry} onFeedbackAction={onFeedbackAction} routeId={route.id} />
 
-=======
->>>>>>> 99fa54b10813d37fd4180e1178ad6a253b04bc42
         <Link
           href={`/roadmap/${route.id}`}
           className="mt-5 inline-flex w-full items-center justify-center rounded-full bg-ink px-4 py-3 text-sm font-black text-white transition hover:bg-leaf sm:w-auto"

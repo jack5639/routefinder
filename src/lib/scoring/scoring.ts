@@ -383,19 +383,26 @@ export function scoreRoute(route: RouteOption, answers: QuizAnswers): ScoredRout
   const targetFit = targetScore(answers, route);
   const fit = clampScore(23 + interestFit + styleFit + targetFit);
 
-  const feasibility = clampScore(
+  const gradeAndSubjectReadiness = clampScore(
     gradeScore(answers.predictedGrades, route.preferredGrades) +
       travelScore(answers, route) +
       overlapScore(answers.subjects, [...route.relatedCourses, ...route.relatedInterests], 5, 18) +
       20,
   );
 
-  const constraint = clampScore(
+  const readiness = clampScore(
     debtPenalty[answers.debtPreference][route.debtLevel] * 5 +
       earnSoonScore(answers, route) +
       overlapScore(answers.constraints, route.constraintsSupported, 8, 24) +
       (answers.maxTravelMinutes >= route.maxTypicalTravelMinutes ? 8 : 0),
   );
+
+  const eligibility =
+    route.requirementEvidenceStatus === "conflicting"
+      ? 35
+      : route.requirementEvidenceStatus === "missing"
+        ? 55
+        : gradeAndSubjectReadiness;
 
   const missingInfo = [
     answers.targetCareer ? "" : "A target career would make this comparison more specific.",
@@ -403,8 +410,15 @@ export function scoreRoute(route: RouteOption, answers: QuizAnswers): ScoredRout
     answers.subjects.length ? "" : "Subjects or current course details would improve feasibility scoring.",
   ].filter(Boolean);
 
-  const confidence = clampScore(88 - missingInfo.length * 9 - (fit < 48 ? 7 : 0) - (feasibility < 48 ? 7 : 0));
-  const totalScore = clampScore(fit * 0.42 + feasibility * 0.32 + constraint * 0.26);
+  const confidenceLimitations = [
+    route.evidenceLevel === "demo" || route.sourceKind === "demo" ? "This route currently uses demo data rather than provider-backed records." : "",
+    route.freshnessStatus === "stale" ? "The route data is stale and needs checking directly." : "",
+    route.freshnessStatus === "missing" || route.freshnessStatus === "error" ? "Current source data is unavailable, so this comparison has limits." : "",
+    route.requirementEvidenceStatus === "missing" ? "Entry requirements are not currently available, so eligibility is not confirmed." : "",
+    route.requirementEvidenceStatus === "conflicting" ? "Available sources disagree about entry requirements, so check the provider directly." : "",
+  ].filter(Boolean);
+  const confidence = clampScore(92 - missingInfo.length * 9 - confidenceLimitations.length * 14 - (fit < 48 ? 7 : 0));
+  const totalScore = clampScore(fit * 0.36 + eligibility * 0.29 + readiness * 0.25 + confidence * 0.1);
 
   const watchOuts = [...route.risks];
 
@@ -416,12 +430,23 @@ export function scoreRoute(route: RouteOption, answers: QuizAnswers): ScoredRout
     watchOuts.push("Costs and student finance may need extra planning because you prefer to avoid debt.");
   }
 
+  if (route.requirementEvidenceStatus === "missing") {
+    watchOuts.push("Entry requirements are not currently evidenced, so this route remains worth checking rather than being ruled in or out.");
+  }
+
+  if (route.requirementEvidenceStatus === "conflicting") {
+    watchOuts.push("Available requirement sources conflict, so confirm the latest details with the provider before relying on this comparison.");
+  }
+
   return {
     ...route,
     scores: {
       fit,
-      feasibility,
-      constraint,
+      eligibility,
+      readiness,
+      // Compatibility fields for existing saved-roadmap and simulator views.
+      feasibility: eligibility,
+      constraint: readiness,
       confidence,
     },
     totalScore,
@@ -431,6 +456,7 @@ export function scoreRoute(route: RouteOption, answers: QuizAnswers): ScoredRout
       nextSteps: route.nextSteps,
       backupOptions: route.backupOptions,
       missingInfo,
+      confidenceLimitations,
     },
   };
 }
@@ -440,8 +466,8 @@ export function rankRoutes(routes: RouteOption[], answers: QuizAnswers, limit = 
 }
 
 export function classifyScoredRoute(route: ScoredRoute, rankIndex = 0): DecisionBoardCategoryId {
-  const { fit, feasibility, constraint, confidence } = route.scores;
-  const balancedCoreScore = Math.min(feasibility, constraint, confidence);
+  const { fit, eligibility, readiness, confidence } = route.scores;
+  const balancedCoreScore = Math.min(eligibility, readiness, confidence);
 
   if (
     (rankIndex === 0 && route.totalScore >= 66 && fit >= 58 && balancedCoreScore >= 55) ||
@@ -450,15 +476,15 @@ export function classifyScoredRoute(route: ScoredRoute, rankIndex = 0): Decision
     return "strong-fit";
   }
 
-  if (fit >= 66 && (feasibility < 58 || constraint < 55)) {
+  if (fit >= 66 && (eligibility < 58 || readiness < 55)) {
     return "stretch";
   }
 
-  if (feasibility >= 68 && constraint >= 68 && route.totalScore >= 56 && fit < 72) {
+  if (eligibility >= 68 && readiness >= 68 && route.totalScore >= 56 && fit < 72) {
     return "safer-backup";
   }
 
-  if (feasibility >= 70 && constraint >= 68 && route.totalScore >= 52 && fit < 58) {
+  if (eligibility >= 70 && readiness >= 68 && route.totalScore >= 52 && fit < 58) {
     return "safer-backup";
   }
 

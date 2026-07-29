@@ -8,6 +8,7 @@
     "build": "next build",
     "lint": "eslint .",
     "test": "vitest run",
+    "docs:check": "node scripts/check-docs.mjs",
     "test:watch": "vitest",
     "data:init": "node scripts/catalog/run-catalog-command.mjs init",
     "data:sync": "node scripts/catalog/run-catalog-command.mjs sync",
