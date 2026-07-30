@@ -17,4 +17,14 @@ describe("Find an Apprenticeship commercial boundary", () => {
     expect(result).toMatchObject({ complete: true });
     expect(result.drafts).toHaveLength(2);
   });
+
+  it("fails rather than declaring a capped snapshot complete", async () => {
+    await expect(fetchApprenticeshipDrafts("key", {
+      maxPages: 1,
+      fetcher: async () => new Response(JSON.stringify({
+        vacancies: [{ vacancyReference: 1, title: "Digital support", employerName: "Example", description: "Support", applicationUrl: "https://example.test/apply" }],
+        hasNextPage: true,
+      })),
+    })).rejects.toThrow("incomplete-pagination");
+  });
 });

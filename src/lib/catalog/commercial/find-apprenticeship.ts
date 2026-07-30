@@ -1,11 +1,11 @@
 import { z } from "zod";
 
 const vacancySchema = z.object({
-  vacancyReference: z.string().or(z.number()).transform(String),
-  title: z.string(),
-  employerName: z.string().default("Employer not supplied"),
-  description: z.string().default("Open apprenticeship vacancy."),
-  closingDate: z.string().optional(),
+  vacancyReference: z.string().min(1).max(100).or(z.number()).transform(String),
+  title: z.string().trim().min(1).max(300),
+  employerName: z.string().trim().min(1).max(300).default("Employer not supplied"),
+  description: z.string().trim().max(10_000).default("Open apprenticeship vacancy."),
+  closingDate: z.string().max(100).optional(),
   vacancyUrl: z.string().url().optional(),
   applicationUrl: z.string().url().optional(),
   postedDate: z.string().optional(),
@@ -16,17 +16,17 @@ const vacancySchema = z.object({
     postcode: z.string().optional(),
   })).optional(),
   address: z.object({ addressLine1: z.string().optional(), town: z.string().optional(), county: z.string().optional() }).optional(),
-  route: z.string().optional(),
-  course: z.object({ title: z.string().optional() }).optional(),
+  route: z.string().max(300).optional(),
+  course: z.object({ title: z.string().max(300).optional() }).optional(),
 }).passthrough();
 
 const responseSchema = z.object({
   vacancies: z.array(vacancySchema).optional(),
   items: z.array(vacancySchema).optional(),
   results: z.array(vacancySchema).optional(),
-  totalPages: z.number().optional(),
-  pageCount: z.number().optional(),
-  totalResults: z.number().optional(),
+  totalPages: z.number().int().nonnegative().optional(),
+  pageCount: z.number().int().nonnegative().optional(),
+  totalResults: z.number().int().nonnegative().optional(),
   hasNextPage: z.boolean().optional(),
 }).passthrough();
 
@@ -72,7 +72,7 @@ export async function fetchApprenticeshipDrafts(apiKey: string, options: { maxPa
     try {
       const candidate = await fetcher(sourceUrl, { headers: { "Ocp-Apim-Subscription-Key": apiKey, "X-Version": "2" }, signal: AbortSignal.timeout(20_000) });
       if (candidate.ok || ![429, 500, 502, 503, 504].includes(candidate.status) || attempt === 2) { response = candidate; break; }
-    } catch (error) { if (attempt === 2) throw error; }
+    } catch { if (attempt === 2) throw new Error("display-api-fetch-failed"); }
     await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
   }
   if (!response) throw new Error("display-api-no-response");
@@ -100,9 +100,20 @@ export async function fetchApprenticeshipDrafts(apiKey: string, options: { maxPa
     };
   }));
   const totalPages = parsed.totalPages ?? parsed.pageCount;
-  if (parsed.hasNextPage === false || (totalPages !== undefined && page >= totalPages) || (parsed.hasNextPage === undefined && totalPages === undefined && vacancies.length < 100)) { complete = true; break; }
+  if (
+    parsed.hasNextPage === false
+    || (totalPages !== undefined && page >= totalPages)
+    || (parsed.totalResults !== undefined && all.length >= parsed.totalResults)
+    || (parsed.hasNextPage === undefined && totalPages === undefined && parsed.totalResults === undefined && vacancies.length < 100)
+  ) { complete = true; break; }
   page += 1;
   }
   if (!complete) throw new Error("display-api-incomplete-pagination");
-  return { drafts: all, complete };
+  const bySourceId = new Map<string, ApprenticeshipDraft>();
+  for (const draft of all) {
+    const prior = bySourceId.get(draft.sourceId);
+    if (prior && JSON.stringify(prior.rawSnapshot) !== JSON.stringify(draft.rawSnapshot)) throw new Error("display-api-duplicate-source-id");
+    bySourceId.set(draft.sourceId, draft);
+  }
+  return { drafts: [...bySourceId.values()], complete };
 }

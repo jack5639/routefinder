@@ -40,11 +40,12 @@ describe("PUT /api/profile", () => {
     getMutationApiContext.mockResolvedValue({ user: { id: userId }, admin: { rpc, from } });
   });
 
-  it("sends preserved IDs and statuses to the one transactional replacement RPC", async () => {
+  it("sends profile, consent, preserved IDs and statuses to one transactional RPC", async () => {
     const response = await PUT(new Request("https://example.com/api/profile", { method: "PUT", body: JSON.stringify(payload()) }));
     expect(response.status).toBe(200);
-    expect(rpc).toHaveBeenCalledWith("replace_readiness_profile", expect.objectContaining({
+    expect(rpc).toHaveBeenCalledWith("save_readiness_profile", expect.objectContaining({
       p_user_id: userId,
+      p_policy_version: "2026-07-29",
       p_profile: expect.objectContaining({ qualifications_complete: true }),
       p_qualifications: [
         expect.objectContaining({ id: qualificationId, status: "achieved", grade: "A" }),

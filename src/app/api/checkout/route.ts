@@ -27,7 +27,12 @@ export async function POST() {
   });
   if (reservationError || !Array.isArray(reservationRows) || reservationRows.length !== 1) {
     const rateLimited = reservationError?.message.includes("checkout_rate_limited");
-    return apiError(rateLimited ? "Please wait before starting another checkout." : "Checkout is temporarily unavailable.", rateLimited ? 429 : 503, rateLimited ? "rate-limited" : "database-unavailable");
+    const alreadyActive = reservationError?.message.includes("checkout_already_active");
+    return apiError(
+      rateLimited ? "Please wait before starting another checkout." : alreadyActive ? "Cycle access is already active on this account." : "Checkout is temporarily unavailable.",
+      rateLimited ? 429 : alreadyActive ? 409 : 503,
+      rateLimited ? "rate-limited" : alreadyActive ? "already-active" : "database-unavailable",
+    );
   }
   const reservation = reservationRows[0] as { reservation_id: string; offer: "founding-launch" | "standard"; amount_pence: number; currency: "gbp"; expires_at: string };
   const metadata = checkoutMetadataSchema.parse({

@@ -60,7 +60,7 @@ export async function PUT(request: Request) {
     experience_summary: profile.experienceSummary || null,
   };
 
-  const replacement = await context.admin.rpc("replace_readiness_profile", {
+  const replacement = await context.admin.rpc("save_readiness_profile", {
     p_user_id: context.user.id,
     p_profile: profileRow,
     p_qualifications: qualifications.map((qualification) => ({
@@ -70,30 +70,19 @@ export async function PUT(request: Request) {
       grade: qualification.grade ?? null,
       status: qualification.status,
     })),
+    p_policy_version: policyVersion,
   });
   if (replacement.error) {
     return apiError("Your readiness information could not be saved. Nothing was changed; please try again.", 503, "unavailable");
   }
 
-  await Promise.all([
-    context.admin.from("consent_records").upsert({
-      user_id: context.user.id,
-      policy_kind: "privacy-and-terms",
-      policy_version: policyVersion,
-      granted: true,
-    }),
-    context.admin.from("audit_events").insert({
-      user_id: context.user.id,
-      action: "readiness-profile-updated",
-      entity_type: "profile",
-      entity_id: context.user.id,
-    }),
-    context.admin.from("analytics_events").insert({
-      user_id: context.user.id,
-      event_name: "readiness_completed",
-      properties: { application_cycle: profile.applicationCycle },
-    }),
-  ]);
+  // Product analytics is deliberately best effort. Profile, consent, and the
+  // operational audit record have already committed atomically in the RPC.
+  await context.admin.from("analytics_events").insert({
+    user_id: context.user.id,
+    event_name: "readiness_completed",
+    properties: { application_cycle: profile.applicationCycle },
+  });
 
   return NextResponse.json({ ok: true });
 }

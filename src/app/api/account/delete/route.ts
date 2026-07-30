@@ -11,17 +11,22 @@ export async function POST(request: Request) {
   const parsed = deleteSchema.safeParse(await parseJson(request));
   if (!parsed.success) return apiError("Type DELETE to confirm account deletion.");
 
-  await context.admin.from("analytics_events").insert({
-    user_id: context.user.id,
-    event_name: "deletion_requested",
-    properties: {},
-  });
-  await context.admin.from("audit_events").insert({
+  // The operational audit is required evidence and must exist before the
+  // destructive auth operation. Product analytics remains best effort.
+  const audit = await context.admin.from("audit_events").insert({
     user_id: context.user.id,
     action: "account.deletion_requested",
     entity_type: "user",
     entity_id: context.user.id,
     metadata: {},
+  });
+  if (audit.error) {
+    return apiError("Account deletion is temporarily unavailable. Contact support if this continues.", 503, "unavailable");
+  }
+  await context.admin.from("analytics_events").insert({
+    user_id: context.user.id,
+    event_name: "deletion_requested",
+    properties: {},
   });
 
   try {

@@ -63,7 +63,7 @@ describe.skipIf(!enabled)("Stripe test-mode staging fulfilment", () => {
     for (const override of invalids) {
       const event = { id: `evt_${randomUUID().replaceAll("-", "")}`, object: "event", type: "checkout.session.completed", created: 1_800_000_001, livemode: false,
         data: { object: { id: `cs_test_${randomUUID()}`, object: "checkout.session", payment_status: "paid", currency: reservation.currency, amount_total: reservation.amount_pence, metadata: { reservation_id: reservation.reservation_id, user_id: userId, application_cycle: String(cycle), offer: reservation.offer }, ...override } } };
-      expect((await send(event)).ok).toBe(true);
+      expect((await send(event)).status).toBeGreaterThanOrEqual(400);
     }
     const { data } = await admin!.from("entitlements").select("*").eq("user_id", userId);
     expect(data).toHaveLength(0);

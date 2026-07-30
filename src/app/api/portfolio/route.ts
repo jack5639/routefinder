@@ -49,6 +49,18 @@ export async function POST(request: Request) {
     if (!opportunity) return apiError("That reviewed opportunity is unavailable.", 404, "not-found");
   }
 
+  const existingQuery = context.supabase
+    .from("portfolio_items")
+    .select("*")
+    .eq("user_id", context.user.id)
+    .eq("active", true);
+  const existing =
+    "opportunityId" in parsed.data
+      ? await existingQuery.eq("opportunity_id", parsed.data.opportunityId).maybeSingle()
+      : await existingQuery.eq("external_url", parsed.data.externalUrl).maybeSingle();
+  if (existing.error) return apiError("Your saved opportunities are temporarily unavailable.", 503, "unavailable");
+  if (existing.data) return NextResponse.json({ item: existing.data, duplicate: true });
+
   const [countResult, entitlementResult] = await Promise.all([
     context.supabase.from("portfolio_items").select("*", { count: "exact", head: true }).eq("user_id", context.user.id).eq("active", true),
     context.supabase.from("entitlements").select("plan,status,ends_at").eq("user_id", context.user.id).maybeSingle(),
@@ -84,8 +96,16 @@ export async function POST(request: Request) {
       "limit-reached",
     );
   }
+  if (databaseErrorIs(error, "duplicate key")) {
+    const raced =
+      "opportunityId" in parsed.data
+        ? await context.admin.from("portfolio_items").select("*").eq("user_id", context.user.id).eq("opportunity_id", parsed.data.opportunityId).eq("active", true).single()
+        : await context.admin.from("portfolio_items").select("*").eq("user_id", context.user.id).eq("external_url", parsed.data.externalUrl).eq("active", true).single();
+    if (!raced.error) return NextResponse.json({ item: raced.data, duplicate: true });
+  }
   if (error) return apiError("This opportunity could not be saved.", 503, "unavailable");
 
+  // Product analytics is best effort and does not own the saved item.
   await context.admin.from("analytics_events").insert({
     user_id: context.user.id,
     event_name: "opportunity_saved",

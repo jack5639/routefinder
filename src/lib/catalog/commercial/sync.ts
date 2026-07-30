@@ -1,13 +1,15 @@
 import "server-only";
 
 import { fetchApprenticeshipDrafts, type ApprenticeshipDraft } from "@/lib/catalog/commercial/find-apprenticeship";
-import { fetchDiscoverUniDataset } from "@/lib/catalog/commercial/discover-uni";
-import { changedFields, freshnessExpiry, hasChanges, hashSnapshot } from "@/lib/catalog/commercial/revisions";
+import { fetchDiscoverUniDataset, type DiscoverUniCourseDraft, type DiscoverUniSnapshot } from "@/lib/catalog/commercial/discover-uni";
+import { freshnessExpiry, hashSnapshot } from "@/lib/catalog/commercial/revisions";
 import { logServerEvent } from "@/lib/logging";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type Admin = ReturnType<typeof createAdminClient>;
-type Imported = ApprenticeshipDraft & { kind: "apprenticeship-vacancy"; sourceAuthority: "find-an-apprenticeship-api-v2" };
+type Imported = (ApprenticeshipDraft | (DiscoverUniCourseDraft & { summary: string; sourceUrl: string; retrievedAt: string; rawSnapshot: unknown }))
+  & { kind: "apprenticeship-vacancy" | "university-course"; sourceAuthority: "find-an-apprenticeship-api-v2" | "discover-uni-hesa" };
+const BATCH_SIZE = 100;
 
 const approvalFor = (source: string) => source === "find-an-apprenticeship-api-v2"
   ? process.env.APPRENTICESHIP_SOURCE_APPROVAL_REFERENCE
@@ -20,46 +22,87 @@ async function alert(event: string, detail: Record<string, unknown>) {
   try { await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event, ...detail }) }); } catch { /* logging is the reliable fallback */ }
 }
 
-async function upsertImported(admin: Admin, runId: string, drafts: Imported[], sourceUrl: string, complete: boolean) {
+function normalizedFact(draft: Imported) {
+  return {
+    kind: draft.kind,
+    sector: draft.sector,
+    title: draft.title,
+    provider_name: draft.providerName,
+    location: draft.location,
+    summary: draft.summary,
+    deadline: "deadline" in draft ? draft.deadline ?? null : null,
+    application_url: draft.applicationUrl,
+    source_url: draft.sourceUrl,
+    state: draft.kind === "university-course" ? "unknown" : "open",
+  };
+}
+
+async function ingestBatches(admin: Admin, runId: string, drafts: Imported[], sourceUrl: string, approvalReference: string, snapshot?: DiscoverUniSnapshot) {
   let changed = 0;
-  const seen = new Set<string>();
-  for (const draft of drafts) {
-    seen.add(draft.sourceId);
-    const now = draft.retrievedAt;
-    const proposed = {
-      source_id: draft.sourceId, kind: draft.kind, sector: draft.sector, title: draft.title,
-      provider_name: draft.providerName, location: draft.location, summary: draft.summary,
-      deadline: draft.deadline ?? null, application_url: draft.applicationUrl, source_url: draft.sourceUrl,
-      state: "open",
-    };
-    const { data: existing } = await admin.from("opportunities").select("*").eq("source_authority", draft.sourceAuthority).eq("source_id", draft.sourceId).maybeSingle();
-    if (!existing) {
-      const { data: organisation } = await admin.from("organisations").upsert({ kind: "employer", name: draft.providerName, source_authority: draft.sourceAuthority, updated_at: now }, { onConflict: "kind,name" }).select("id").single();
-      const { data: created, error } = await admin.from("opportunities").insert({ ...proposed, organisation_id: organisation?.id, source_authority: draft.sourceAuthority, retrieved_at: now, last_seen_at: now, freshness_expires_at: freshnessExpiry(now, 2), freshness: "needs-checking", publication_state: "draft", raw_snapshot: draft.rawSnapshot }).select("id").single();
-      if (error) throw new Error("catalogue-opportunity-create");
-      await admin.from("catalogue_observations").insert({ opportunity_id: created.id, source_run_id: runId, source_authority: draft.sourceAuthority, source_id: draft.sourceId, source_url: sourceUrl, retrieved_at: now, snapshot_hash: hashSnapshot(draft.rawSnapshot), normalized_fact: proposed, raw_fact: draft.rawSnapshot, classification_reason: draft.classificationReason, classification_version: "v1" });
-      continue;
-    }
-    const changes = changedFields(existing as Record<string, unknown>, proposed);
-    const observation = await admin.from("catalogue_observations").insert({ opportunity_id: existing.id, source_run_id: runId, source_authority: draft.sourceAuthority, source_id: draft.sourceId, source_url: sourceUrl, retrieved_at: now, snapshot_hash: hashSnapshot(draft.rawSnapshot), normalized_fact: proposed, raw_fact: draft.rawSnapshot, classification_reason: draft.classificationReason, classification_version: "v1" }).select("id").single();
-    await admin.from("opportunities").update({ last_seen_at: now, retrieved_at: now, freshness_expires_at: freshnessExpiry(now, 2), raw_snapshot: draft.rawSnapshot, updated_at: now }).eq("id", existing.id);
-    if (!hasChanges(changes)) continue;
-    changed += 1;
-    if (existing.publication_state === "published") {
-      await admin.from("catalogue_fact_revisions").insert({ opportunity_id: existing.id, observation_id: observation.data?.id, field_changes: changes, proposed_fact: proposed });
-      await admin.from("source_issues").insert({ opportunity_id: existing.id, issue_kind: "conflicting", detail: "Imported source facts changed and await review." });
-    } else {
-      await admin.from("opportunities").update({ ...proposed, freshness: "needs-checking", updated_at: now }).eq("id", existing.id);
-    }
+  let created = 0;
+  for (let offset = 0; offset < drafts.length; offset += BATCH_SIZE) {
+    const items = drafts.slice(offset, offset + BATCH_SIZE).map((draft) => ({
+      sourceId: draft.sourceId,
+      sourceUrl: draft.sourceUrl,
+      retrievedAt: draft.retrievedAt,
+      freshnessExpiresAt: freshnessExpiry(draft.retrievedAt, draft.kind === "university-course" ? 8 : 2),
+      snapshotHash: hashSnapshot(draft.rawSnapshot),
+      normalizedFact: normalizedFact(draft),
+      rawFact: draft.rawSnapshot,
+      classificationReason: draft.classificationReason,
+      classificationVersion: "v1",
+      ...(snapshot ? { attribution: { credit: snapshot.attribution, licence: "https://creativecommons.org/licenses/by/4.0/", changes: "Routefinder selected and transformed launch-scope course fields from the Discover Uni dataset." } } : {}),
+    }));
+    const result = await admin.rpc("ingest_catalogue_observation_batch", {
+      p_source_run_id: runId,
+      p_source_authority: drafts[offset].sourceAuthority,
+      p_source_url: sourceUrl,
+      p_source_approval_reference: approvalReference,
+      p_items: items,
+    });
+    if (result.error) throw new Error("catalogue-batch-ingest-failed");
+    const summary = result.data as { changed?: number; created?: number } | null;
+    changed += summary?.changed ?? 0;
+    created += summary?.created ?? 0;
   }
-  if (complete) {
-    const { data: missing } = await admin.from("opportunities").select("id,source_id,publication_state").eq("source_authority", "find-an-apprenticeship-api-v2").neq("state", "closed");
-    for (const opportunity of missing ?? []) if (opportunity.source_id && !seen.has(opportunity.source_id)) {
-      await admin.from("opportunities").update({ state: "closed", freshness: "low", updated_at: new Date().toISOString() }).eq("id", opportunity.id);
-      await admin.from("source_issues").insert({ opportunity_id: opportunity.id, issue_kind: "closed", detail: "Not present in a complete official source snapshot." });
-    }
-  }
-  return changed;
+  return { changed, created };
+}
+
+async function beginRun(admin: Admin, sourceAuthority: string, sourceUrl: string) {
+  const result = await admin.rpc("begin_catalogue_source_run", {
+    p_source_authority: sourceAuthority,
+    p_source_url: sourceUrl,
+    p_stale_after_minutes: 90,
+  });
+  if (result.error || !result.data) throw new Error(result.error?.message.includes("already_active") ? "catalogue-run-already-active" : "catalogue-run-create");
+  return String(result.data);
+}
+
+async function finishRun(admin: Admin, runId: string, values: {
+  status: "completed" | "failed"; complete: boolean; retrieved: number; changed: number;
+  snapshotHash?: string; metadata?: Record<string, unknown>; errorCode?: string; closeMissing?: boolean;
+}) {
+  const result = await admin.rpc("finish_catalogue_source_run", {
+    p_source_run_id: runId,
+    p_status: values.status,
+    p_complete_snapshot: values.complete,
+    p_retrieved_count: values.retrieved,
+    p_records_changed: values.changed,
+    p_snapshot_hash: values.snapshotHash,
+    p_metadata: values.metadata ?? {},
+    p_error_code: values.errorCode,
+    p_close_missing: values.closeMissing ?? false,
+  });
+  if (result.error) throw new Error("catalogue-run-finish-failed");
+}
+
+async function alertBacklog(admin: Admin, source: string, runId: string, changed: number) {
+  const [revisions, issues] = await Promise.all([
+    admin.from("catalogue_fact_revisions").select("id", { count: "exact", head: true }).eq("status", "pending"),
+    admin.from("source_issues").select("id", { count: "exact", head: true }).neq("status", "resolved"),
+  ]);
+  if (changed > 100) await alert("catalogue.unusual_change_volume", { source, runId, changed });
+  if ((revisions.count ?? 0) > 50 || (issues.count ?? 0) > 50) await alert("catalogue.review_backlog", { source, runId, pendingRevisions: revisions.count ?? 0, unresolvedIssues: issues.count ?? 0 });
 }
 
 export async function syncApprenticeships() {
@@ -67,30 +110,72 @@ export async function syncApprenticeships() {
   if (!key) throw new Error("APPRENTICESHIP_API_KEY is not configured.");
   if (!approvalFor("find-an-apprenticeship-api-v2")) throw new Error("APPRENTICESHIP_SOURCE_APPROVAL_REFERENCE is required before commercial sync.");
   const admin = createAdminClient(); const sourceUrl = "https://api.apprenticeships.education.gov.uk/vacancies";
-  const { data: run, error } = await admin.from("source_runs").insert({ source_authority: "find-an-apprenticeship-api-v2", status: "running", source_url: sourceUrl }).select("id").single();
-  if (error || !run) throw new Error("catalogue-run-already-active");
+  const runId = await beginRun(admin, "find-an-apprenticeship-api-v2", sourceUrl);
+  let retrieved = 0;
+  let changed = 0;
   try {
     const result = await fetchApprenticeshipDrafts(key);
     const drafts: Imported[] = result.drafts.map((draft) => ({ ...draft, kind: "apprenticeship-vacancy", sourceAuthority: "find-an-apprenticeship-api-v2" }));
-    const changed = await upsertImported(admin, run.id, drafts, sourceUrl, result.complete);
-    await admin.from("source_runs").update({ status: "completed", completed_at: new Date().toISOString(), retrieved_count: drafts.length, records_changed: changed, complete_snapshot: result.complete }).eq("id", run.id);
+    retrieved = drafts.length;
+    ({ changed } = await ingestBatches(admin, runId, drafts, sourceUrl, approvalFor("find-an-apprenticeship-api-v2")!));
+    await finishRun(admin, runId, { status: "completed", complete: result.complete, retrieved, changed, snapshotHash: hashSnapshot(drafts.map((draft) => draft.rawSnapshot)), closeMissing: result.complete });
+    if (!result.complete) await alert("catalogue.sync_incomplete", { source: "apprenticeships", runId, retrieved });
+    await alertBacklog(admin, "apprenticeships", runId, changed);
     return { drafted: drafts.length, changed, complete: result.complete };
   } catch (error) {
-    await admin.from("source_runs").update({ status: "failed", completed_at: new Date().toISOString(), error_code: error instanceof Error ? error.message.slice(0, 80) : "unknown" }).eq("id", run.id);
-    await alert("catalogue.sync_failed", { source: "apprenticeships", runId: run.id }); throw error;
+    const code = error instanceof Error ? error.message.slice(0, 80) : "unknown";
+    try { await finishRun(admin, runId, { status: "failed", complete: false, retrieved, changed, errorCode: code }); } catch { /* the original bounded failure remains authoritative */ }
+    await alert("catalogue.sync_failed", { source: "apprenticeships", runId, errorCode: code }); throw error;
   }
 }
 
 export async function syncDiscoverUni() {
   const sourceUrl = process.env.DISCOVER_UNI_DATASET_URL;
   if (!sourceUrl) throw new Error("DISCOVER_UNI_DATASET_URL is not configured.");
+  const approval = approvalFor("discover-uni-hesa");
+  if (!approval) throw new Error("DISCOVER_UNI_SOURCE_APPROVAL_REFERENCE is required before commercial sync.");
   const admin = createAdminClient();
-  const { data: run } = await admin.from("source_runs").insert({ source_authority: "discover-uni-hesa", status: "running", source_url: sourceUrl }).select("id").single();
-  if (!run) throw new Error("catalogue-run-create");
+  const runId = await beginRun(admin, "discover-uni-hesa", sourceUrl);
+  let retrieved = 0;
+  let changed = 0;
   try {
     const dataset = await fetchDiscoverUniDataset(sourceUrl);
-    for (const course of dataset.courses) await admin.from("opportunities").upsert({ source_id: course.sourceId, kind: "university-course", sector: course.sector, title: course.title, provider_name: course.providerName, location: course.location, summary: "Discover Uni candidate. Verify the official provider page and requirements before publishing.", application_url: course.applicationUrl, source_url: course.applicationUrl, source_authority: "discover-uni-hesa", retrieved_at: dataset.snapshot.retrievedAt, last_seen_at: dataset.snapshot.retrievedAt, freshness_expires_at: freshnessExpiry(dataset.snapshot.retrievedAt, 7), freshness: "needs-checking", state: "unknown", publication_state: "draft", raw_snapshot: { ...course.rawSnapshot, attribution: dataset.snapshot.attribution, licence: dataset.snapshot.licence }, updated_at: new Date().toISOString() }, { onConflict: "source_authority,source_id", ignoreDuplicates: true });
-    await admin.from("source_runs").update({ status: "completed", completed_at: new Date().toISOString(), retrieved_count: dataset.courses.length, complete_snapshot: true, snapshot_hash: dataset.snapshot.sha256, metadata: dataset.snapshot }).eq("id", run.id);
-    return { drafted: dataset.courses.length, snapshot: dataset.snapshot };
-  } catch (error) { await admin.from("source_runs").update({ status: "failed", completed_at: new Date().toISOString(), error_code: error instanceof Error ? error.message.slice(0, 80) : "unknown" }).eq("id", run.id); await alert("catalogue.sync_failed", { source: "discover-uni", runId: run.id }); throw error; }
+    const drafts: Imported[] = dataset.courses.map((course) => ({
+      ...course,
+      kind: "university-course",
+      sourceAuthority: "discover-uni-hesa",
+      summary: "Discover Uni candidate. Verify the provider’s primary course page and every requirement before publishing.",
+      sourceUrl: course.applicationUrl,
+      retrievedAt: dataset.snapshot.retrievedAt,
+    }));
+    retrieved = drafts.length;
+    ({ changed } = await ingestBatches(admin, runId, drafts, sourceUrl, approval, dataset.snapshot));
+    await finishRun(admin, runId, { status: "completed", complete: true, retrieved, changed, snapshotHash: dataset.snapshot.sha256, metadata: dataset.snapshot as unknown as Record<string, unknown>, closeMissing: false });
+    await alertBacklog(admin, "discover-uni", runId, changed);
+    return { drafted: drafts.length, changed, complete: true, snapshot: dataset.snapshot };
+  } catch (error) {
+    const code = error instanceof Error ? error.message.slice(0, 80) : "unknown";
+    try { await finishRun(admin, runId, { status: "failed", complete: false, retrieved, changed, errorCode: code }); } catch { /* the original bounded failure remains authoritative */ }
+    await alert("catalogue.sync_failed", { source: "discover-uni", runId, errorCode: code }); throw error;
+  }
+}
+
+export async function maintainCommercialCatalogue() {
+  const admin = createAdminClient();
+  const result = await admin.rpc("maintain_catalogue_operations");
+  if (result.error) {
+    await alert("catalogue.maintenance_failed", { errorCode: "catalogue-maintenance-failed" });
+    throw new Error("catalogue-maintenance-failed");
+  }
+  const counts = result.data as {
+    staleRunsRecovered?: number; expiredOpportunities?: number; expiredRequirements?: number; oldPendingRevisions?: number;
+    staleSources?: string[];
+  };
+  if ((counts.staleRunsRecovered ?? 0) > 0) await alert("catalogue.stale_runs_recovered", { count: counts.staleRunsRecovered });
+  if ((counts.oldPendingRevisions ?? 0) > 0) await alert("catalogue.pending_revision_age", { count: counts.oldPendingRevisions });
+  if ((counts.staleSources ?? []).length > 0) await alert("catalogue.source_stale", { sources: counts.staleSources });
+  if ((counts.expiredOpportunities ?? 0) + (counts.expiredRequirements ?? 0) > 0) {
+    await alert("catalogue.freshness_expired", { opportunities: counts.expiredOpportunities ?? 0, requirements: counts.expiredRequirements ?? 0 });
+  }
+  return counts;
 }

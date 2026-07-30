@@ -1,6 +1,6 @@
 import { strToU8, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
-import { parseDiscoverUniArchive } from "@/lib/catalog/commercial/discover-uni";
+import { classifyDiscoverUniSector, parseDiscoverUniArchive } from "@/lib/catalog/commercial/discover-uni";
 
 describe("Discover Uni commercial dataset boundary", () => {
   it("normalises launch-sector courses and preserves attribution metadata", () => {
@@ -18,5 +18,11 @@ describe("Discover Uni commercial dataset boundary", () => {
   });
   it("rejects data that is not a ZIP archive", () => {
     expect(() => parseDiscoverUniArchive(strToU8("not a zip"), "https://example.test/data")).toThrow("invalid-archive");
+  });
+  it("retains ambiguous launch-sector courses as unclassified", () => {
+    expect(classifyDiscoverUniSector("Software engineering and business management")).toEqual({
+      sector: "unclassified",
+      classificationReason: "ambiguous-sector-keywords",
+    });
   });
 });

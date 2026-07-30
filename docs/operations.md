@@ -16,13 +16,23 @@ This document is the durable operating baseline for the customer-ready MVP plann
 
 Applied migrations are immutable history. Never repair a deployed project by editing an older migration. Before applying a new migration, query each known staging and production project's `supabase_migrations.schema_migrations` ledger (or use the linked Supabase CLI migration listing) and record whether `202607290001` and all later versions are present. Apply the forward-only repair migration to staging before production.
 
-Run the isolated attack suite only with the five `SUPABASE_SECURITY_STAGING_*` variables documented in `.env.example` and an isolated, non-production staging project:
+Run the isolated attack suite only with every `SUPABASE_SECURITY_STAGING_*` variable documented in `.env.example`, an explicit project reference, the exact acknowledgement, and a matching `environment_sentinels` row in an isolated, non-production project:
 
 ```bash
 pnpm test:supabase-security
 ```
 
-The command creates two disposable confirmed synthetic accounts, obtains direct anonymous/authenticated PostgREST sessions, uses the staging database connection to inspect migration/RLS/trigger metadata, and deletes the accounts in a `finally` block. It must never use production values. Record the project/environment, migration versions, timestamp, redacted synthetic-account identifiers, operator, pass/fail result for migration/RLS, cross-user reads, browser writes, raw catalogue, cross-object relationships, entitlement concurrency, service RPCs, and audit/payment integrity, plus cleanup outcome. A failed or unrun suite blocks production; static migration-string tests are supplementary only.
+The command creates two disposable confirmed synthetic accounts, obtains direct anonymous/authenticated PostgREST sessions, uses the staging database connection to inspect every migration through `202607300004`, RLS, grants, triggers and constraints, and removes all synthetic rows in a verified `finally` path. It must never use production values. Only redacted project identifiers may be printed. Record the project/environment, migration versions, timestamp, operator, pass/fail result for migration/RLS, cross-user reads, browser writes, raw catalogue, cross-object relationships, entitlement concurrency, service RPCs, audit/payment integrity, and cleanup outcome. A failed or unrun suite blocks production; static migration-string tests are supplementary only.
+
+### Authenticated commercial verification
+
+The authenticated Playwright suite is opt-in and uses the same sentinel-marked isolated project as the locally started application:
+
+```bash
+pnpm test:e2e:commercial
+```
+
+It creates confirmed disposable users with the Admin API, establishes normal student sessions without email delivery, disables token-bearing traces/screenshots, and deletes synthetic users and catalogue fixtures in teardown. The service-role key remains in the Node test runner and must never be passed to browser code.
 
 ## Data map and DPIA baseline
 
@@ -50,7 +60,44 @@ The founder owns the source register and must record a written approval referenc
 | Discover Uni dataset | [HESA Discover Uni dataset](https://www.hesa.ac.uk/support/tools-and-downloads/unistats) | CC BY 4.0: reuse is allowed with credit, licence link, and indication of changes. HESA advises onward users to contact it about presentation considerations. Provider pages remain authoritative for application facts and requirements. | “HESA, www.hesa.ac.uk”, CC BY 4.0, with a link and statement of changes. | Weekly Wednesday check; imported courses remain drafts until provider-source review. | Record owner confirmation/contact outcome in `DISCOVER_UNI_SOURCE_APPROVAL_REFERENCE`; not a substitute for provider verification. |
 | UCAS comprehensive course listings | [UCAS Courses Data Service](https://www.ucas.com/business/all-our-commercial-marketing-and-data-products) | Do not import or scrape comprehensive UCAS listings. UCAS advertises a paid Courses Data Service; use only after a separately approved commercial agreement. | As specified by the agreement. | No automated ingestion. | **Blocked** without executed UCAS agreement. |
 
-Launch requires at least 80 manually reviewed published opportunities: 10 in each technology, engineering, business and finance × university-course and apprenticeship-vacancy cell, with at least 40 of each route type and meaningful provider/employer diversity. Every record must have a working official destination, correct/open or explicitly unknown deadline, verified provider/employer and location, source-backed requirements, provenance, retrieved and last-verified dates, freshness, attribution, and reviewer. The machine-readable `/api/admin/catalogue/readiness` report must pass; a shortfall blocks launch.
+Launch requires at least 80 manually reviewed published opportunities: 10 in each technology, engineering, business and finance × university-course and apprenticeship-vacancy cell, with at least 40 of each route type. Each route type must have at least 10 distinct providers/employers and no one provider/employer may account for more than 25%. Every record must have a working official destination, an open state, no passed deadline, verified provider/employer and location, source-backed requirements, provenance, retrieved and last-verified dates, unexpired freshness, attribution where required, and reviewer. The machine-readable `/api/admin/catalogue/readiness` report must pass; a shortfall blocks launch.
+
+### Commercial catalogue operating procedure
+
+Source-run state is `running -> completed` or `running -> failed`. The database rejects overlapping runs for one source. A run left `running` for more than 90 minutes is failed with the bounded code `stale-running-run` before recovery. Fetch or validation errors are recorded as bounded codes; raw payloads and credentials are never sent to logs or alert webhooks.
+
+The apprenticeship job must follow every official API page and its bounded retry policy. A cap, partial response, failed page, failed observation batch, or failed finalisation makes the run incomplete and prevents closure. Only a complete successful snapshot can mark previously observed apprenticeship vacancies missing from that run as closed. Discover Uni archive absence never closes or withdraws a course because dataset anomalies and provider course status require human investigation.
+
+Every processed candidate creates an observation with its source run, last-seen and retrieval times, snapshot hash, classification reason, normalised facts, and a server-restricted raw fact. Draft facts may be refreshed. Published facts do not change: a field-level pending revision is created and the current reviewed value remains public. Repeated identical observations are idempotent, repeated source versions do not create another pending revision or issue, and a genuinely newer source version supersedes the obsolete pending revision.
+
+The review queue at `/admin/catalogue` supports source, route type, sector, publication, freshness, open state, missing requirement, unclassified, pending revision, conflict/source issue, missing verification, and launch-failure filtering. Reviewers use official application and requirement-source links, compare current and proposed values, enter a note, and accept, reject, supersede, or withdraw revisions. Opportunity and requirement edits preserve previous reviewed facts in the restricted audit history.
+
+Publication is one service-role-only transaction. It checks admin authentication at the API boundary and then fails closed in Postgres for missing source approval, non-launch or unclassified sector, closed/unknown state, missing official facts, verification older than 30 days, expired freshness, passed deadline, pending revision, unresolved source issue, missing reviewed requirement, missing supporting evidence, conflict, unsupported deterministic rule, or missing Discover Uni attribution. The publication state, review record, and audit event succeed together. Anonymous and ordinary authenticated clients have no execute grant. Withdrawal remains immediately available with a reviewer note.
+
+The readiness report checks record-level publication failures plus the 80-record total, all eight 10-record cells, both 40-record route totals, diversity, duplicates, source-run health, and review backlog. It reports the next useful queue without exposing raw snapshots.
+
+### Scheduled catalogue work and alerts
+
+- `23 */6 * * *`: complete Find an Apprenticeship snapshot.
+- `41 3 * * 3`: weekly Wednesday Discover Uni archive observation.
+- `7 4 * * *`: stale-run recovery, freshness expiry, and pending-revision age check.
+
+The existing optional `CATALOGUE_ALERT_WEBHOOK_URL` receives only event names, source/run identifiers, bounded error codes, and counts. Failed, incomplete, stale, unusually changed, review-backlog, old-pending-revision, and freshness-expiry conditions also use redacted server logs. No raw record or student data is included. No external monitoring vendor is implied.
+
+### Building the minimum reviewed launch catalogue
+
+1. Record the founder’s written permission reference for the apprenticeship API and the Discover Uni owner/contact outcome. Do not treat a credential as permission.
+2. Configure source credentials only in the intended server environment and apply every migration through `202607300005`.
+3. Run each source from the admin console and confirm its source run completed; only apprenticeship runs marked `complete snapshot` are closure-safe.
+4. Work the unclassified, missing-verification, missing-requirement, pending-revision, and source-issue queues first.
+5. For Discover Uni drafts, open the provider’s primary course page, correct the official destination and current facts, and add each requirement from that primary source. Discover Uni is not the entry-requirement authority.
+6. For every requirement, preserve supporting wording, source URL, retrieval time, verification time, reviewer note, and a supported structured rule only when it is a deterministic A-level or GCSE grade rule.
+7. Use the eight readiness cells to maintain at least 10 reviewed records in each cell, at least 40 of each route type, and the documented diversity rule. Do not fill shortfalls with demo, fabricated, automatically inferred, or unreviewed records.
+8. Resolve or explicitly reject/supersede source revisions and source issues. Withdraw any record whose safety is uncertain.
+9. Publish one record at a time through the reviewed transaction. Record the reviewer and reason.
+10. Do not open launch until `/api/admin/catalogue/readiness` returns `ready: true` and the separate security, policy, accessibility, payment, restore, and production gates pass.
+
+No review-manifest import/export was added. The filtered queue remains the single review system and avoids a second path that could drift from the database publication authority.
 
 ## Subprocessors
 
@@ -78,7 +125,13 @@ Enable scheduled staging and production backups in Supabase. At least quarterly,
 pnpm db:restore-test
 ```
 
-Use distinct database URLs and the exact acknowledgement in `.env.example`. Verify migrations, table counts, RLS, authentication references, a synthetic profile/export/delete cycle, and deletion replay. Record date, operator, backup identifier, result, follow-up actions, and when the restore project was destroyed. Never restore over staging or production.
+Use distinct project references and database URLs, the exact acknowledgement, and a matching disposable `restore-test` sentinel in the target before restoration. Verify migrations, schema security, authentication references, a synthetic profile/qualification/portfolio/evidence/task/application export-and-delete cycle, retained-record anonymisation, cleanup, and deletion replay. Record date, operator, backup identifier, result, follow-up actions, and when the restore project was destroyed. Never restore over staging or production.
+
+Deletion-ledger replay remains a launch blocker. A database backup cannot contain a deletion tombstone created after that backup point, so an in-database table would give false assurance. Before implementation, the founder and privacy/legal reviewer must approve the separately durable ledger store, minimum fields, lawful basis, retention period, access, encryption, and destruction procedure. `pnpm db:restore-test` verifies the other restore controls and exits non-zero at this explicit decision boundary.
+
+### Release command
+
+`pnpm verify:local` runs ordinary non-destructive local/CI-equivalent checks. `pnpm release:verify` is strict and requires the exact release acknowledgement plus explicit `1` flags for the isolated Supabase attack, authenticated commercial Playwright, Stripe staging, and restore suites. A missing selection is reported as `required-but-skipped` and fails the run. Each suite prints a concise human status and the orchestrator emits a credential-free JSON summary.
 
 ## Support and incidents
 
@@ -93,6 +146,10 @@ Create a source issue, preserve the reported URL and minimal detail, compare pri
 ### Refunds and complaints
 
 Payment support checks Stripe event IDs and entitlement audit history. Approved refunds update Stripe and end entitlement through the webhook. Complaints receive a case owner, acknowledgement, evidence review, outcome, and second-review route. Safeguarding, privacy, discrimination, or legal matters use the relevant specialist procedure.
+
+### Stripe staging verification
+
+Before enabling a live Stripe key, apply every payment migration to the isolated staging Supabase project and run the opt-in payment integration suite with `PAYMENT_STAGING_BASE_URL`, `PAYMENT_STAGING_SUPABASE_URL`, `PAYMENT_STAGING_SUPABASE_SERVICE_ROLE_KEY`, and `PAYMENT_STAGING_STRIPE_WEBHOOK_SECRET`. Confirm a Stripe test-mode signed webhook for each of: one paid completion, duplicate concurrent delivery, an unpaid/incomplete completion, wrong currency/amount/metadata, full refund, partial refund, dispute creation, dispute closure, an older completion after a terminal event, and a temporary database failure followed by retry. Record the migration versions, event IDs (redacted where required), resulting entitlement/order/event states, and cleanup result. Do not use live customer data or a production project for this procedure.
 
 ### Security incident or breach
 

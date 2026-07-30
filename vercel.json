@@ -21,6 +21,10 @@
     {
       "path": "/api/cron/catalogue?source=discover-uni",
       "schedule": "41 3 * * 3"
+    },
+    {
+      "path": "/api/cron/catalogue?source=maintenance",
+      "schedule": "7 4 * * *"
     }
   ]
 }
