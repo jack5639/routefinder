@@ -8,6 +8,8 @@ const migration = readFileSync("supabase/migrations/202607290001_customer_ready_
 const hardeningMigration = readFileSync("supabase/migrations/202607290002_harden_direct_database_access.sql", "utf8");
 const reassertionMigration = readFileSync("supabase/migrations/202607290004_reassert_database_security.sql", "utf8");
 const readinessMigration = readFileSync("supabase/migrations/202607300001_transactional_readiness_profile.sql", "utf8");
+const releaseMigration = readFileSync("supabase/migrations/202607300004_release_verification_and_atomic_mutations.sql", "utf8");
+const catalogueOperationsMigration = readFileSync("supabase/migrations/202607300005_catalogue_publication_operations.sql", "utf8");
 const apiContext = readFileSync("src/lib/api-context.ts", "utf8");
 const publicCatalogue = readFileSync("src/lib/supabase/public-catalogue.ts", "utf8");
 
@@ -79,6 +81,31 @@ describe("database security boundary", () => {
     expect(readinessMigration).toContain("grant execute on function public.replace_readiness_profile(uuid, jsonb, jsonb) to service_role;");
     expect(readinessMigration).toContain("duplicate_qualification_id");
     expect(readinessMigration).toContain("qualification_not_found");
+  });
+
+  it("keeps transactional catalogue publication inaccessible to browser roles", () => {
+    expect(catalogueOperationsMigration).toContain("create or replace function public.review_catalogue_publication");
+    expect(catalogueOperationsMigration).toContain("grant execute on function public.review_catalogue_publication");
+    expect(catalogueOperationsMigration).toContain("to service_role;");
+    expect(catalogueOperationsMigration).not.toMatch(/grant execute on function public\.review_catalogue_publication[\s\S]*?\bto (?:anon|authenticated)\b/);
+  });
+
+  it("atomically records readiness consent/audit and evidence assessment history", () => {
+    expect(releaseMigration).toContain("create or replace function public.save_readiness_profile");
+    expect(releaseMigration).toContain("perform public.replace_readiness_profile");
+    expect(releaseMigration).toContain("insert into public.consent_records");
+    expect(releaseMigration).toContain("insert into public.audit_events");
+    expect(releaseMigration).toContain("create or replace function public.save_evidence_requirement_link");
+    expect(releaseMigration).toContain("insert into public.assessment_versions");
+    expect(releaseMigration).toContain("to service_role;");
+    expect(releaseMigration).not.toMatch(/grant\s+execute[\s\S]*?\bto\s+(?:anon|authenticated)\b/i);
+  });
+
+  it("marks destructive environments in a service-only table and prevents active portfolio duplicates", () => {
+    expect(releaseMigration).toContain("create table if not exists public.environment_sentinels");
+    expect(releaseMigration).toContain("revoke all privileges on table public.environment_sentinels from public, anon, authenticated;");
+    expect(releaseMigration).toContain("portfolio_one_active_catalogue_item");
+    expect(releaseMigration).toContain("portfolio_one_active_external_item");
   });
 
   it("reasserts least privilege for deployed projects and closes future defaults", () => {

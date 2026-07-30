@@ -2,7 +2,7 @@ export type PlanCode = "free" | "cycle";
 
 export interface Entitlement {
   plan: PlanCode;
-  status: "active" | "refunded" | "disputed" | "expired";
+  status: "active" | "refunded" | "disputed" | "payment_review" | "expired";
   endsAt?: string;
 }
 

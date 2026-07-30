@@ -1,6 +1,6 @@
 # Routefinder Architecture
 
-Last reviewed: 29 July 2026
+Last reviewed: 30 July 2026
 
 Status: authoritative technical direction. Current sections describe the repository today; release-gate sections distinguish source-complete work from external production work.
 
@@ -207,6 +207,9 @@ Browser storage remains acceptable for low-risk prototype state. The local SQLit
 - Authenticated browser/session roles may read only the rows and published catalogue columns they are authorised to see.
 - Commercial mutations pass through authenticated API routes and a server-only service-role client; the service-role key is never exposed to the browser.
 - A readiness profile and its qualification rows are replaced through one server-only transaction. Qualification identifiers and achieved, predicted, or unknown status are retained; a failed row mutation must not leave a partially updated profile.
+- Readiness replacement, required consent evidence, and its operational audit record commit through one service-only transaction; product analytics remains explicitly best effort.
+- Evidence-link updates and their assessment-version history commit through one service-only transaction.
+- Active catalogue and external portfolio destinations have concurrency-safe uniqueness. A repeated save returns the existing active item.
 - Database constraints and triggers independently enforce user ownership, cross-object relationships, and concurrency-safe entitlement limits.
 - Database migrations revoke browser-role table and function privileges by default, then grant only explicitly reviewed read access and server RPC execution.
 - Keep database access behind repository or domain interfaces.
@@ -233,7 +236,17 @@ See `adr/001-local-storage-boundary.md`.
 
 The official Find an Apprenticeship Display Vacancy Advert API is the preferred English vacancy source. Discover Uni/HESA may provide open university data within its licence. Comprehensive UCAS data requires an approved commercial basis.
 
-Commercial sync stores append-only source observations and pending field revisions. It may update a draft candidate, but it never overwrites a published fact: the public record remains authoritative until an authorised reviewer accepts a revision. A completed source snapshot may mark missing vacancies closed; partial or failed snapshots cannot. Scheduled source runs use the protected catalogue cron route and alert operations on failure or stale/backlogged review.
+Commercial sync stores append-only source observations and pending field revisions. External records are validated before ingestion and sent to Postgres in bounded batches of at most 100. One transaction per batch records the organisation, draft or last-seen state, restricted raw observation, hash, classification reason, and revision decision input. It may update a draft candidate, but it never overwrites a published fact: the public record remains authoritative until an authorised reviewer accepts a revision.
+
+`source_runs` follow `running -> completed` or `running -> failed`. A source-specific database lock prevents overlap; a run abandoned for 90 minutes is changed to `failed` before a later run may begin. A run is closure-safe only when fetch, pagination, boundary validation, every observation batch, and finalisation all succeed and `complete_snapshot` is true. Only that state may close missing apprenticeship vacancies. Partial, capped, failed, and Discover Uni snapshots never close missing records.
+
+The database keeps at most one pending revision for an opportunity. An identical observation is idempotent; an identical proposed source version reuses the pending decision; a newer proposed version supersedes the older pending revision without changing published facts. Active source issues are fingerprinted so retries do not multiply identical issues.
+
+The admin review queue reads only safe normalised facts, bounded diffs, review metadata, and readiness failures. Raw source observations remain service-only. Opportunity facts and requirement create, edit, reverify, conflict, resolution, withdrawal, and supersession operations run through one audit-preserving database transaction.
+
+Publication is a service-role-only database transaction attributed to an authenticated allowlisted reviewer. It fails unless the opportunity is open, in a launch sector, recently verified and unexpired, source-approved where required, attributable where derived from Discover Uni, has complete official destinations and source fields, has no passed deadline, pending revision, or unresolved source issue, and has at least one source-backed reviewed requirement. Conflicting or unsupported deterministic hard requirements block publication. The opportunity mutation, publication review, and audit event commit atomically. Withdrawal uses the same reviewed path but intentionally remains available immediately.
+
+The pure catalogue readiness evaluator is shared by `/api/admin/catalogue/readiness` and the review API. It enforces 80 published records, ten in every sector × route cell, forty per route type, at least ten distinct providers/employers per route type with no provider above 25%, record publication gates, duplicate detection, and recent complete source runs.
 
 ## Recommendation boundary
 
@@ -316,6 +329,18 @@ Current variables are listed in `.env.example`. The commercial groups are:
 | `STRIPE_WEBHOOK_SECRET` | When payments open | Stripe webhook signature verification |
 | `STRIPE_EXPECTED_LIVEMODE` | When payments open | Explicitly pins webhook and checkout to Stripe test (`false`) or live (`true`) mode |
 | `PAYMENT_STAGING_*` | Staging integration test only | Isolated staging endpoint, Supabase service role, and Stripe test webhook secret; never production credentials |
+| `COMMERCIAL_E2E_*` | Authenticated staging browser test only | Isolated project identity, anonymous key, server-only setup key, and exact acknowledgement |
+| `SUPABASE_SECURITY_STAGING_*` | Destructive security test only | Explicit isolated project identity, database connection, sentinel, keys, and exact acknowledgement |
+| `SUPABASE_RESTORE_TEST_*` | Destructive restore test only | Separate disposable restore target identity, API and database access |
+| `RELEASE_VERIFY_*` | Strict release operator only | Exact acknowledgement and explicit selection of every external launch suite |
+
+### Payment projection and retries
+
+Checkout receives a short-lived reservation from the database. That reservation is the sole authority for the offer, GBP amount, application cycle, and access end date; it also atomically allocates the limited founding price and refuses a new checkout while Cycle is active. A signed webhook is accepted only in the configured Stripe environment. A completion must be `complete` and `paid`, carry validated metadata, and match its unconsumed reservation and profile.
+
+One service-role-only, fixed-`search_path` RPC serialises each Stripe event, updates the entitlement and order, writes the minimal audit/analytics projection, and only then marks the event processed. Any required-write failure rolls back the projection. The handler records a bounded retryable `failed` marker separately and returns a non-2xx response; malformed, unsupported, and environment-mismatched events fail closed without retaining their payload. Duplicate delivery returns successfully without a second projection.
+
+Refunds and disputes remove access. A partial refund moves the entitlement to `payment_review`, which has Free limits, until support explicitly resolves it. Same-second conflicting events are resolved conservatively: a terminal event can supersede a completion, but a completion never supersedes an existing same-second terminal event. A dispute closure never restores access automatically.
 | `CRON_SECRET` | Production | Authorises entitlement-expiry jobs |
 | `ADMIN_EMAILS` | Production review | Catalogue-review allowlist |
 | `APPRENTICESHIP_API_KEY` | Catalogue sync | Official Display Advert API v2 |
@@ -364,6 +389,8 @@ pnpm typecheck
 pnpm build
 pnpm docs:check
 pnpm test:e2e
+pnpm verify:local
+pnpm release:verify
 ```
 
 ## Remaining production sequence

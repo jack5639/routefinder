@@ -1,6 +1,6 @@
 # Routefinder Final Product and Commercial Plan
 
-Last updated: 29 July 2026
+Last updated: 30 July 2026
 
 Status: final strategic direction for the customer-ready MVP launching on 15 October 2026. Change the launch direction only when user evidence or commercial results contradict an assumption below.
 
@@ -547,6 +547,8 @@ Every material fact must include:
 6. require human review for new, ambiguous, conflicting, or high-impact requirements.
 7. publish with provenance.
 8. monitor closure and freshness.
+
+The implemented commercial workflow performs source observation in bounded database batches, keeps one superseding pending revision chain per opportunity, and preserves published reviewed values until a human accepts a source change. Publication and requirement review are service-owned database transactions with reviewer identity, mandatory notes, and retained prior facts. Source automation cannot call a browser-accessible publication operation.
 
 Start with a deliberately narrow, real, verified catalogue for the four launch sectors. Do not expand mock records as a substitute for source-backed integration.
 

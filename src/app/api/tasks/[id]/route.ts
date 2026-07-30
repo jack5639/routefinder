@@ -45,6 +45,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
   if (error) return apiError("The action could not be updated.", 404, "not-found");
   if (parsed.data.status === "completed") {
+    // Analytics and replenishment are best effort after the task state is
+    // correct. A failed candidate refresh never reopens a completed task.
     await context.admin.from("analytics_events").insert({
       user_id: context.user.id,
       event_name: "action_completed",

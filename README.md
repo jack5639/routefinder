@@ -70,9 +70,12 @@ pnpm typecheck
 pnpm build
 pnpm docs:check
 pnpm test:e2e
+pnpm verify:local
 ```
 
 Run the relevant checks before handing off a change. `docs:check` validates required documents, internal links, the documentation index, retired duplicate plans, conflict markers, and `.env.example` coverage. If the environment prevents a check, report that limitation rather than implying success.
+
+`verify:local` runs the ordinary non-destructive source and public-browser gates. `release:verify` is a separate strict operator command: it fails unless every isolated Supabase security, authenticated commercial, Stripe staging, and restore suite is explicitly selected and configured. It never substitutes production credentials for missing test configuration.
 
 ## Catalogue commands
 
@@ -86,6 +89,16 @@ pnpm data:agent
 The catalogue defaults to `data/catalog/catalog.sqlite`. Local databases and snapshots are ignored by Git.
 
 The local commands above are for the compatibility catalogue. Commercial ingestion uses the Find an Apprenticeship Display Advert API v2 and the Discover Uni/HESA dataset boundary, then requires human publication review. Do not use the prototype HTML parsers commercially.
+
+Commercial catalogue operation is performed from `/admin/catalogue` by an account in `ADMIN_EMAILS`. The review workspace provides a server-paged queue, source and readiness filters, safe source-change diffs, reviewed opportunity and requirement editing, and the authoritative launch-readiness report. Source credentials and founder-recorded approval references are hard gates. Imports create drafts or pending revisions only; the service-role-only database publication transaction is the sole publication path.
+
+The scheduled commercial cadence is:
+
+- Find an Apprenticeship full snapshot every six hours;
+- Discover Uni archive observation each Wednesday;
+- daily stale-run recovery, freshness expiry, and old-review-backlog checks.
+
+Only a complete successful apprenticeship snapshot can close missing vacancies. Discover Uni absence never automatically closes or withdraws a course.
 
 ## Current route map
 

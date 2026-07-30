@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { strFromU8, unzipSync } from "fflate";
+import { z } from "zod";
 
 export interface DiscoverUniSnapshot {
   sourceUrl: string;
@@ -16,7 +17,8 @@ export interface DiscoverUniCourseDraft {
   providerName: string;
   location: string;
   applicationUrl: string;
-  sector: "technology" | "engineering" | "business" | "finance";
+  sector: "technology" | "engineering" | "business" | "finance" | "unclassified";
+  classificationReason: string;
   rawSnapshot: Record<string, string>;
 }
 
@@ -67,14 +69,28 @@ function value(row: Record<string, string>, keys: string[]) {
   return "";
 }
 
-function launchSector(title: string): DiscoverUniCourseDraft["sector"] | null {
+export function classifyDiscoverUniSector(title: string): Pick<DiscoverUniCourseDraft, "sector" | "classificationReason"> {
   const normalised = title.toLowerCase();
-  if (/computer|computing|software|cyber|data science|information technology|artificial intelligence/.test(normalised)) return "technology";
-  if (/engineer|manufactur|mechatronic|aerospace|robotic|electronic/.test(normalised)) return "engineering";
-  if (/account|finance|banking|economics|actuari/.test(normalised)) return "finance";
-  if (/business|management|marketing|entrepreneur|human resource/.test(normalised)) return "business";
-  return null;
+  const matches = [
+    ["technology", /computer|computing|software|cyber|data science|information technology|artificial intelligence/],
+    ["engineering", /engineer|manufactur|mechatronic|aerospace|robotic|electronic/],
+    ["finance", /account|finance|banking|economics|actuari/],
+    ["business", /business|management|marketing|entrepreneur|human resource/],
+  ].filter(([, pattern]) => (pattern as RegExp).test(normalised)) as Array<["technology" | "engineering" | "business" | "finance", RegExp]>;
+  if (matches.length !== 1) return { sector: "unclassified", classificationReason: matches.length ? "ambiguous-sector-keywords" : "no-launch-sector-keywords" };
+  return { sector: matches[0][0], classificationReason: `keyword:${matches[0][1].source}` };
 }
+
+const courseBoundarySchema = z.object({
+  sourceId: z.string().min(1).max(240),
+  title: z.string().min(1).max(300),
+  providerName: z.string().min(1).max(300),
+  location: z.string().min(1).max(300),
+  applicationUrl: z.string().url(),
+  sector: z.enum(["technology", "engineering", "business", "finance", "unclassified"]),
+  classificationReason: z.string().min(1).max(300),
+  rawSnapshot: z.record(z.string(), z.string()),
+});
 
 export function parseDiscoverUniArchive(bytes: Uint8Array, sourceUrl: string, retrievedAt = new Date().toISOString()): DiscoverUniDataset {
   if (bytes.length < 4 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) throw new Error("discover-uni-invalid-archive");
@@ -92,26 +108,28 @@ export function parseDiscoverUniArchive(bytes: Uint8Array, sourceUrl: string, re
   const courseRows = parseCsv(strFromU8(entry[1]));
   const courses = courseRows.flatMap((row) => {
     const title = value(row, ["KISCOURSETITLE", "COURSETITLE", "TITLE"]);
-    const sector = launchSector(title);
+    const classification = classifyDiscoverUniSector(title);
     const sourceId = value(row, ["KISCOURSEID", "COURSEID", "UCASPROGID"]);
     const providerId = value(row, ["UKPRN", "PUBUKPRN", "PROVIDERID"]);
     const providerName = institutionById.get(providerId) || value(row, ["PROVIDERNAME", "INSTITUTIONNAME"]);
     const applicationUrl = value(row, ["CRSEURL", "COURSEURL", "URL"]);
-    if (!title || !sector || !sourceId || !providerName || !applicationUrl) return [];
+    if (!title || !sourceId || !providerName || !applicationUrl || classification.classificationReason === "no-launch-sector-keywords") return [];
     try {
       new URL(applicationUrl);
     } catch {
       return [];
     }
-    return [{
+    const candidate = {
       sourceId: `${providerId}:${sourceId}`,
       title,
       providerName,
       location: value(row, ["LOCNAME", "LOCATION", "TOWN", "REGION"]) || "See provider course page",
       applicationUrl,
-      sector,
+      ...classification,
       rawSnapshot: row,
-    }];
+    };
+    const parsed = courseBoundarySchema.safeParse(candidate);
+    return parsed.success ? [parsed.data] : [];
   });
   return {
     snapshot: {
