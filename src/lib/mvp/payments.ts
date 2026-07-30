@@ -1,7 +1,7 @@
 export type PaymentState = "active" | "refunded" | "disputed";
 
 export function shouldApplyPaymentEvent(currentEventCreatedAt: number | null | undefined, incomingEventCreatedAt: number) {
-  return incomingEventCreatedAt >= (currentEventCreatedAt ?? 0);
+  return incomingEventCreatedAt > (currentEventCreatedAt ?? 0);
 }
 
 export function paymentStateForEvent(eventType: string): PaymentState | null {

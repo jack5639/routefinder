@@ -2,12 +2,21 @@ import { z } from "zod";
 
 import { launchSectors } from "@/lib/mvp/types";
 
+export const privacyTermsVersion = "2026-07-29" as const;
+
 export const qualificationSchema = z.object({
   id: z.string().uuid().optional(),
   qualificationType: z.string().trim().min(1).max(80),
   subject: z.string().trim().min(1).max(100),
-  grade: z.string().trim().max(20).optional(),
+  grade: z.string().trim().min(1).max(20).optional(),
   status: z.enum(["predicted", "achieved", "unknown"]),
+}).superRefine((qualification, context) => {
+  if (qualification.status === "unknown" && qualification.grade) {
+    context.addIssue({ code: "custom", path: ["grade"], message: "Unknown qualifications cannot include a grade." });
+  }
+  if (qualification.status !== "unknown" && !qualification.grade) {
+    context.addIssue({ code: "custom", path: ["grade"], message: "Add the predicted or achieved grade." });
+  }
 });
 
 export const profileSchema = z.object({
@@ -22,8 +31,9 @@ export const profileSchema = z.object({
   financialPreference: z.enum(["open", "cost-aware", "prefer-lower-debt"]),
   constraints: z.array(z.string().trim().min(1).max(120)).max(10),
   experienceSummary: z.string().trim().max(1000).optional(),
-  qualifications: z.array(qualificationSchema).min(1).max(20),
-  policyVersion: z.string().trim().min(1).max(40),
+  qualifications: z.array(qualificationSchema).max(20),
+  qualificationsComplete: z.boolean(),
+  policyVersion: z.literal(privacyTermsVersion),
 });
 
 export const portfolioCreateSchema = z.union([
@@ -74,20 +84,6 @@ export const applicationSchema = z.object({
 });
 
 export const analyticsSchema = z.object({
-  eventName: z.enum([
-    "readiness_started",
-    "readiness_completed",
-    "opportunity_saved",
-    "evidence_added",
-    "action_scheduled",
-    "action_completed",
-    "paywall_viewed",
-    "checkout_started",
-    "checkout_completed",
-    "application_stage_updated",
-    "source_issue_reported",
-    "export_requested",
-    "deletion_requested",
-  ]),
-  properties: z.record(z.string(), z.union([z.string().max(100), z.number(), z.boolean()])).default({}),
+  eventName: z.literal("readiness_started"),
+  properties: z.object({}).strict().default({}),
 });

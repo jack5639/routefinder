@@ -1,12 +1,13 @@
 import Link from "next/link";
 
 import { SignInForm } from "@/app/signin/signin-form";
+import { normalisePostLoginPath } from "@/lib/auth/return-path";
 
 export const metadata = { title: "Sign in" };
 
 export default async function SignInPage({ searchParams }: { searchParams: Promise<{ next?: string; error?: string }> }) {
   const params = await searchParams;
-  const nextPath = params.next?.startsWith("/") ? params.next : "/app";
+  const nextPath = normalisePostLoginPath(params.next);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[linear-gradient(145deg,#fbf8ef,#dff3e8,#dceeff)] px-4 py-10">

@@ -16,6 +16,7 @@ describe("starting strategy", () => {
         workStyles: ["practical"],
         financialPreference: "cost-aware",
         constraints: ["Need to confirm travel"],
+        qualificationsComplete: false,
       },
       [{ id: "q1", qualificationType: "A level", subject: "Maths", status: "unknown" }],
     );

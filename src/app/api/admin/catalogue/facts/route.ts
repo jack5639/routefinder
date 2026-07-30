@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { apiError, getApiContext, parseJson } from "@/lib/api-context";
+import { parseEligibilityRule, serialiseEligibilityRule } from "@/lib/scoring/eligibility-rules";
 import { createAdminClient, isAdminEmail } from "@/lib/supabase/admin";
 
 const bodySchema = z.union([
@@ -22,6 +23,7 @@ const bodySchema = z.union([
     qualificationType: z.string().trim().max(80).optional(),
     subject: z.string().trim().max(100).optional(),
     minimumGrade: z.string().trim().max(20).optional(),
+    eligibilityRule: z.unknown().optional(),
   }),
 ]);
 
@@ -45,15 +47,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ verified: true });
   }
 
+  const legacyStructuredValue = {
+    ...(parsed.data.qualificationType ? { qualificationType: parsed.data.qualificationType } : {}),
+    ...(parsed.data.subject ? { subject: parsed.data.subject } : {}),
+    ...(parsed.data.minimumGrade ? { minimumGrade: parsed.data.minimumGrade } : {}),
+  };
+  const rawRule = parsed.data.eligibilityRule === undefined ? legacyStructuredValue : { eligibilityRule: parsed.data.eligibilityRule };
+  const eligibilityRule = parsed.data.hardRequirement ? parseEligibilityRule(rawRule) : undefined;
+  if (parsed.data.hardRequirement && parsed.data.kind !== "grade") {
+    return apiError("Only supported grade rules can be recorded as deterministic hard requirements.", 422, "unsupported-rule");
+  }
+  if (parsed.data.hardRequirement && !eligibilityRule) {
+    return apiError("A deterministic hard requirement needs a complete supported qualification rule.", 422, "invalid-rule");
+  }
+
   const { data, error } = await admin.from("requirements").insert({
     opportunity_id: parsed.data.opportunityId,
     kind: parsed.data.kind,
     label: parsed.data.label,
-    structured_value: {
-      ...(parsed.data.qualificationType ? { qualificationType: parsed.data.qualificationType } : {}),
-      ...(parsed.data.subject ? { subject: parsed.data.subject } : {}),
-      ...(parsed.data.minimumGrade ? { minimumGrade: parsed.data.minimumGrade } : {}),
-    },
+    structured_value: eligibilityRule ? serialiseEligibilityRule(eligibilityRule) : legacyStructuredValue,
     supporting_text: parsed.data.supportingText,
     source_url: parsed.data.sourceUrl,
     retrieved_at: now,

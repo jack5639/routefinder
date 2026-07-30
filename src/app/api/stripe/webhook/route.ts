@@ -2,121 +2,76 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 
 import { getServerEnv } from "@/lib/env";
-import { cycleEndDate } from "@/lib/mvp/entitlements";
-import { shouldApplyPaymentEvent } from "@/lib/mvp/payments";
+import { checkoutSessionIsPaid, isExpectedStripeMode } from "@/lib/mvp/payment-fulfilment";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
+async function reject(admin: ReturnType<typeof createAdminClient>, event: Stripe.Event, code: string) {
+  const { error } = await admin.rpc("reject_stripe_payment_event", {
+    p_event_id: event.id,
+    p_event_type: event.type,
+    p_event_created_at: event.created,
+    p_error_code: code,
+  });
+  return error ? NextResponse.json({ error: "Webhook processing failed." }, { status: 500 }) : NextResponse.json({ received: true, rejected: true });
+}
+
+function identifier(value: string | { id: string } | null | undefined) {
+  return typeof value === "string" ? value : value?.id ?? null;
+}
+
 export async function POST(request: Request) {
   let env: ReturnType<typeof getServerEnv>;
-  try {
-    env = getServerEnv();
-  } catch {
+  try { env = getServerEnv(); } catch { return NextResponse.json({ error: "Webhook configuration missing." }, { status: 503 }); }
+  if (!env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET || env.STRIPE_EXPECTED_LIVEMODE === undefined) {
     return NextResponse.json({ error: "Webhook configuration missing." }, { status: 503 });
   }
-  if (!env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET) {
-    return NextResponse.json({ error: "Webhook configuration missing." }, { status: 503 });
-  }
-
   const signature = request.headers.get("stripe-signature");
   if (!signature) return NextResponse.json({ error: "Missing signature." }, { status: 400 });
 
-  const stripe = new Stripe(env.STRIPE_SECRET_KEY);
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(await request.text(), signature, env.STRIPE_WEBHOOK_SECRET);
-  } catch {
-    return NextResponse.json({ error: "Invalid signature." }, { status: 400 });
-  }
+    event = new Stripe(env.STRIPE_SECRET_KEY).webhooks.constructEvent(await request.text(), signature, env.STRIPE_WEBHOOK_SECRET);
+  } catch { return NextResponse.json({ error: "Invalid signature." }, { status: 400 }); }
 
   const admin = createAdminClient();
-  const { data: prior } = await admin.from("stripe_events").select("id,processing_status").eq("id", event.id).maybeSingle();
-  if (prior?.processing_status === "processed") return NextResponse.json({ received: true, duplicate: true });
-  await admin.from("stripe_events").upsert({
-    id: event.id,
-    event_type: event.type,
-    event_created_at: event.created,
-    processing_status: "processing",
-    error_code: null,
-    updated_at: new Date().toISOString(),
-  });
+  if (!isExpectedStripeMode(event.livemode, env.STRIPE_EXPECTED_LIVEMODE === "true")) return reject(admin, event, "unexpected_stripe_environment");
 
-  try {
-    if (event.type === "checkout.session.completed") {
-      const session = event.data.object;
-      const userId = session.metadata?.user_id;
-      const applicationCycle = Number(session.metadata?.application_cycle);
-      if (userId && Number.isInteger(applicationCycle)) {
-        const { data: current } = await admin.from("entitlements").select("last_payment_event_created_at").eq("user_id", userId).maybeSingle();
-        if (shouldApplyPaymentEvent(current?.last_payment_event_created_at, event.created)) {
-          await admin.from("entitlements").upsert(
-            {
-              user_id: userId,
-              plan: "cycle",
-              status: "active",
-              stripe_customer_id: typeof session.customer === "string" ? session.customer : session.customer?.id,
-              stripe_checkout_session_id: session.id,
-              starts_at: new Date(event.created * 1000).toISOString(),
-              ends_at: cycleEndDate(applicationCycle).toISOString(),
-              last_payment_event_created_at: event.created,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "user_id" },
-          );
-        }
-        await admin.from("orders").upsert({
-          user_id: userId,
-          stripe_checkout_session_id: session.id,
-          amount_pence: session.amount_total ?? (session.metadata?.offer === "founding-launch" ? 2900 : 5900),
-          currency: session.currency ?? "gbp",
-          offer: session.metadata?.offer ?? "standard",
-          status: "paid",
-          purchased_at: new Date(event.created * 1000).toISOString(),
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "stripe_checkout_session_id" });
-        await admin.from("analytics_events").insert({
-          user_id: userId,
-          event_name: "checkout_completed",
-          properties: { offer: session.metadata?.offer ?? "standard" },
-        });
-      }
-    }
-
-    if (event.type === "charge.refunded" || event.type === "charge.dispute.created") {
-      const charge = event.data.object as Stripe.Charge;
-      const customerId = typeof charge.customer === "string" ? charge.customer : charge.customer?.id;
-      const userId = charge.metadata?.user_id;
-      const status = event.type === "charge.refunded" ? "refunded" : "disputed";
-      let query = admin.from("entitlements").select("user_id,last_payment_event_created_at");
-      query = userId ? query.eq("user_id", userId) : query.eq("stripe_customer_id", customerId ?? "");
-      const { data: current } = await query.maybeSingle();
-      if (current && shouldApplyPaymentEvent(current.last_payment_event_created_at, event.created)) {
-        await admin.from("entitlements").update({
-          status,
-          last_payment_event_created_at: event.created,
-          updated_at: new Date().toISOString(),
-        }).eq("user_id", current.user_id);
-        await admin.from("orders").update({ status, updated_at: new Date().toISOString() }).eq("user_id", current.user_id);
-      } else if (userId && !current) {
-        await admin.from("entitlements").upsert({
-          user_id: userId,
-          plan: "cycle",
-          status,
-          stripe_customer_id: customerId,
-          last_payment_event_created_at: event.created,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "user_id" });
-      }
-    }
-    await admin.from("stripe_events").update({ processing_status: "processed", processed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", event.id);
-    return NextResponse.json({ received: true });
-  } catch (error) {
-    await admin.from("stripe_events").update({
-      processing_status: "failed",
-      error_code: error instanceof Error ? error.message.slice(0, 80) : "unknown",
-      updated_at: new Date().toISOString(),
-    }).eq("id", event.id);
-    return NextResponse.json({ error: "Webhook processing failed." }, { status: 500 });
+  let args: Record<string, unknown>;
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object as Stripe.Checkout.Session;
+    const paid = checkoutSessionIsPaid({
+      paymentStatus: session.payment_status,
+      currency: session.currency,
+      amountTotal: session.amount_total,
+      metadata: session.metadata,
+    });
+    if (!paid.ok) return reject(admin, event, paid.code);
+    args = {
+      p_event_id: event.id, p_event_type: event.type, p_event_created_at: event.created, p_live_mode: true,
+      p_reservation_id: paid.metadata.reservation_id, p_user_id: paid.metadata.user_id,
+      p_application_cycle: paid.metadata.application_cycle, p_offer: paid.metadata.offer,
+      p_amount_pence: session.amount_total, p_currency: session.currency?.toLowerCase(),
+      p_checkout_session_id: session.id, p_payment_intent_id: identifier(session.payment_intent),
+    };
+  } else if (event.type === "charge.refunded") {
+    const charge = event.data.object as Stripe.Charge;
+    args = {
+      p_event_id: event.id, p_event_type: event.type, p_event_created_at: event.created, p_live_mode: true,
+      p_charge_id: charge.id, p_payment_intent_id: identifier(charge.payment_intent), p_refunded_amount_pence: charge.amount_refunded,
+    };
+  } else if (event.type === "charge.dispute.created" || event.type === "charge.dispute.closed") {
+    const dispute = event.data.object as Stripe.Dispute;
+    args = {
+      p_event_id: event.id, p_event_type: event.type, p_event_created_at: event.created, p_live_mode: true,
+      p_charge_id: identifier(dispute.charge), p_dispute_status: dispute.status,
+    };
+  } else {
+    return reject(admin, event, "unsupported_event");
   }
+
+  const { data, error } = await admin.rpc("apply_stripe_payment_event", args);
+  if (error) return NextResponse.json({ error: "Webhook processing failed." }, { status: 500 });
+  return NextResponse.json({ received: true, duplicate: data === "duplicate" });
 }

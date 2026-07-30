@@ -55,7 +55,7 @@ The higher-value problem is that a student often cannot answer:
 - What experience or evidence could be used for each requirement?
 - Where are the material gaps?
 - What should be done this week, before the next deadline?
-- Is the overall application portfolio balanced across ambitious, plausible, lower-risk, and exploratory options?
+- Is the overall application portfolio balanced across ambitious, currently plausible, qualification-aligned alternative, and exploratory options?
 - How can university and apprenticeship applications be managed together without missing different deadlines and assessment stages?
 
 Routefinder must make these answers visible, explainable, current, and actionable.
@@ -185,7 +185,7 @@ Do not combine these into one total score:
 2. **Fit**: alignment with stated interests, preferences, and constraints.
 3. **Application readiness**: strength and coverage of the student's current evidence and preparation.
 4. **Information confidence**: source quality, freshness, completeness, and unresolved conflicts.
-5. **Portfolio role**: ambitious, currently plausible, lower-risk backup, exploratory, or needs checking.
+5. **Portfolio role**: ambitious, currently plausible, qualification-aligned alternative, exploratory, or needs checking. A qualification-aligned alternative does not claim an outcome.
 
 Eligibility must always state that providers and employers make decisions and that contextual or unrecorded factors may apply.
 

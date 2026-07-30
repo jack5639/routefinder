@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 
-import { apiError, consumeRateLimit, getApiContext, parseJson } from "@/lib/api-context";
+import {
+  apiError,
+  consumeRateLimit,
+  databaseErrorIs,
+  getApiContext,
+  getMutationApiContext,
+  parseJson,
+} from "@/lib/api-context";
 import { selectThisWeek, type TaskCandidate } from "@/lib/mvp/tasks";
 import { z } from "zod";
 
@@ -29,7 +36,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const context = await getApiContext();
+  const context = await getMutationApiContext();
   if (!context) return apiError("Sign in to schedule an action.", 401, "unauthorised");
   if (!(await consumeRateLimit(context, "task-write", 30, 3600))) {
     return apiError("Too many action changes. Try again shortly.", 429, "rate-limited");
@@ -37,23 +44,28 @@ export async function POST(request: Request) {
 
   const parsed = taskSchema.safeParse(await parseJson(request));
   if (!parsed.success) return apiError("Check the action details and try again.");
+  let ownedOpportunityId: string | null | undefined;
   if (parsed.data.portfolioItemId) {
     const { data: ownedItem } = await context.supabase
       .from("portfolio_items")
-      .select("id")
+      .select("id,opportunity_id")
       .eq("id", parsed.data.portfolioItemId)
       .eq("user_id", context.user.id)
       .maybeSingle();
     if (!ownedItem) return apiError("That saved opportunity is unavailable.", 404, "not-found");
+    ownedOpportunityId = ownedItem.opportunity_id;
   }
   if (parsed.data.requirementId) {
     const { data: publishedRequirement } = await context.supabase
       .from("requirements")
-      .select("id")
+      .select("id,opportunity_id")
       .eq("id", parsed.data.requirementId)
       .eq("publication_state", "published")
       .maybeSingle();
     if (!publishedRequirement) return apiError("That reviewed requirement is unavailable.", 404, "not-found");
+    if (!parsed.data.portfolioItemId || ownedOpportunityId !== publishedRequirement.opportunity_id) {
+      return apiError("That requirement does not belong to the saved opportunity.", 409, "relationship-invalid");
+    }
   }
 
   const candidate: TaskCandidate = {
@@ -65,7 +77,7 @@ export async function POST(request: Request) {
   };
   const [selected] = selectThisWeek([candidate]);
 
-  const { data, error } = await context.supabase
+  const { data, error } = await context.admin
     .from("tasks")
     .insert({
       user_id: context.user.id,
@@ -79,8 +91,14 @@ export async function POST(request: Request) {
     .select("*")
     .single();
 
+  if (databaseErrorIs(error, "workflow_limit:this_week_tasks")) {
+    return apiError("This Week already contains three priority actions.", 409, "task-limit");
+  }
+  if (databaseErrorIs(error, "relationship_invalid:")) {
+    return apiError("That action no longer matches the saved opportunity.", 409, "relationship-invalid");
+  }
   if (error) return apiError("The action could not be scheduled.", 503, "unavailable");
-  await context.supabase.from("analytics_events").insert({
+  await context.admin.from("analytics_events").insert({
     user_id: context.user.id,
     event_name: "action_scheduled",
     properties: {},

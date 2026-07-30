@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { apiError, consumeRateLimit, getApiContext, parseJson } from "@/lib/api-context";
+import { apiError, consumeRateLimit, getApiContext, getMutationApiContext, parseJson } from "@/lib/api-context";
 import { profileSchema } from "@/lib/mvp/schemas";
 
 export async function GET() {
@@ -28,7 +28,7 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
-  const context = await getApiContext();
+  const context = await getMutationApiContext();
 
   if (!context) {
     return apiError("Sign in to save your readiness profile.", 401, "unauthorised");
@@ -46,7 +46,6 @@ export async function PUT(request: Request) {
 
   const { qualifications, policyVersion, ...profile } = parsed.data;
   const profileRow = {
-    id: context.user.id,
     current_stage: profile.currentStage,
     application_cycle: profile.applicationCycle,
     home_region: profile.homeRegion,
@@ -57,56 +56,39 @@ export async function PUT(request: Request) {
     work_styles: profile.workStyles,
     financial_preference: profile.financialPreference,
     constraints: profile.constraints,
+    qualifications_complete: profile.qualificationsComplete,
     experience_summary: profile.experienceSummary || null,
-    updated_at: new Date().toISOString(),
   };
 
-  const profileResult = await context.supabase.from("profiles").upsert(profileRow);
-
-  if (profileResult.error) {
-    return apiError("Your readiness profile could not be saved.", 503, "unavailable");
-  }
-
-  const existing = await context.supabase.from("qualifications").select("id").eq("user_id", context.user.id);
-  const incomingIds = new Set(qualifications.flatMap((qualification) => (qualification.id ? [qualification.id] : [])));
-  const removeIds = (existing.data ?? []).map((row) => row.id).filter((id) => !incomingIds.has(id));
-
-  if (removeIds.length) {
-    await context.supabase.from("qualifications").delete().eq("user_id", context.user.id).in("id", removeIds);
-  }
-
-  if (qualifications.length) {
-    const result = await context.supabase.from("qualifications").upsert(
-      qualifications.map((qualification) => ({
-        ...(qualification.id ? { id: qualification.id } : {}),
-        user_id: context.user.id,
-        qualification_type: qualification.qualificationType,
-        subject: qualification.subject,
-        grade: qualification.grade || null,
-        status: qualification.status,
-        updated_at: new Date().toISOString(),
-      })),
-    );
-
-    if (result.error) {
-      return apiError("Qualifications could not be saved.", 503, "unavailable");
-    }
+  const replacement = await context.admin.rpc("replace_readiness_profile", {
+    p_user_id: context.user.id,
+    p_profile: profileRow,
+    p_qualifications: qualifications.map((qualification) => ({
+      ...(qualification.id ? { id: qualification.id } : {}),
+      qualification_type: qualification.qualificationType,
+      subject: qualification.subject,
+      grade: qualification.grade ?? null,
+      status: qualification.status,
+    })),
+  });
+  if (replacement.error) {
+    return apiError("Your readiness information could not be saved. Nothing was changed; please try again.", 503, "unavailable");
   }
 
   await Promise.all([
-    context.supabase.from("consent_records").upsert({
+    context.admin.from("consent_records").upsert({
       user_id: context.user.id,
       policy_kind: "privacy-and-terms",
       policy_version: policyVersion,
       granted: true,
     }),
-    context.supabase.from("audit_events").insert({
+    context.admin.from("audit_events").insert({
       user_id: context.user.id,
       action: "readiness-profile-updated",
       entity_type: "profile",
       entity_id: context.user.id,
     }),
-    context.supabase.from("analytics_events").insert({
+    context.admin.from("analytics_events").insert({
       user_id: context.user.id,
       event_name: "readiness_completed",
       properties: { application_cycle: profile.applicationCycle },

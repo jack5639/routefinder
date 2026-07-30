@@ -26,7 +26,7 @@ export async function GET() {
   if (!(await adminContext())) return apiError("Admin access required.", 403, "forbidden");
   const admin = createAdminClient();
   const [opportunities, runs, issues] = await Promise.all([
-    admin.from("opportunities").select("*, requirements(*)").order("updated_at", { ascending: false }).limit(200),
+    admin.from("opportunities").select("*, requirements(*), catalogue_fact_revisions(*)").order("updated_at", { ascending: false }).limit(200),
     admin.from("source_runs").select("*").order("started_at", { ascending: false }).limit(20),
     admin.from("source_issues").select("*, opportunities(title)").neq("status", "resolved").order("created_at"),
   ]);

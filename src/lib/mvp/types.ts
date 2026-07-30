@@ -1,5 +1,6 @@
 export const launchSectors = ["technology", "engineering", "business", "finance"] as const;
 export type LaunchSector = (typeof launchSectors)[number];
+export type CatalogueSector = LaunchSector | "unclassified";
 
 export type RouteIntent = "university" | "apprenticeship" | "combined";
 export type RelocationPreference = "stay-local" | "could-relocate" | "unsure";
@@ -15,7 +16,7 @@ export type ReadinessState = "well-supported" | "partly-supported" | "early-stag
 export type PortfolioRole =
   | "ambitious"
   | "currently-plausible"
-  | "lower-risk-backup"
+  | "qualification-aligned-alternative"
   | "exploratory"
   | "needs-checking";
 
@@ -44,6 +45,8 @@ export interface StudentProfile {
   workStyles: string[];
   financialPreference: "open" | "cost-aware" | "prefer-lower-debt";
   constraints: string[];
+  /** Whether missing qualifications can safely be treated as absent. */
+  qualificationsComplete: boolean;
   experienceSummary?: string;
 }
 
@@ -74,7 +77,7 @@ export interface Requirement {
 export interface Opportunity {
   id: string;
   kind: OpportunityKind;
-  sector: LaunchSector;
+  sector: CatalogueSector;
   title: string;
   providerName: string;
   location: string;
@@ -95,6 +98,10 @@ export interface DecisionExplanation<TState extends string> {
   reasons: string[];
   risks: string[];
   missingInformation: string[];
+  /** Profile preferences compared against supported opportunity facts. */
+  evaluatedPreferences: string[];
+  /** Profile preferences kept visible but not compared because the required opportunity facts are unavailable. */
+  unassessedPreferences: string[];
   sourceFacts: Array<{ label: string; sourceUrl: string; verifiedAt?: string }>;
   directCheckAction: string;
 }
@@ -105,4 +112,30 @@ export interface OpportunityAssessment {
   readiness: DecisionExplanation<ReadinessState>;
   informationConfidence: DecisionExplanation<FactConfidence>;
   portfolioRole: DecisionExplanation<PortfolioRole>;
+}
+
+/** A student-owned record used only within their authenticated preparation workspace. */
+export interface EvidenceItem {
+  id: string;
+  evidenceType: string;
+  happened: string;
+  contribution: string;
+  outcome: string;
+  learned: string;
+  supportingDetail?: string;
+  evidenceDate?: string;
+  archived: boolean;
+}
+
+export interface EvidenceRequirementLink {
+  id: string;
+  evidenceId: string;
+  requirementId: string;
+  relevance: string;
+  coverage: EvidenceCoverage;
+  missingSpecificity?: string;
+  confirmedByStudent: boolean;
+  assessmentVersion: number;
+  /** Compatibility metadata used by the evidence graph; not persisted as a link field. */
+  archived?: boolean;
 }

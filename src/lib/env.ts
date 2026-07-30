@@ -10,6 +10,7 @@ const serverSchema = publicSchema.extend({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   STRIPE_SECRET_KEY: z.string().min(1).optional(),
   STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
+  STRIPE_EXPECTED_LIVEMODE: z.enum(["true", "false"]).optional(),
   ADMIN_EMAILS: z.string().optional(),
 });
 
@@ -34,6 +35,7 @@ export function getServerEnv(): ServerEnv {
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
+    STRIPE_EXPECTED_LIVEMODE: process.env.STRIPE_EXPECTED_LIVEMODE,
     ADMIN_EMAILS: process.env.ADMIN_EMAILS,
   });
 }

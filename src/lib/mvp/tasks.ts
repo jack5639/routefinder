@@ -1,4 +1,5 @@
 import type { EvidenceCoverage, Requirement } from "@/lib/mvp/types";
+import type { RequirementAssessmentState } from "@/lib/mvp/requirement-assessment";
 
 export interface TaskCandidate {
   id: string;
@@ -8,6 +9,7 @@ export interface TaskCandidate {
   dueDate?: string;
   requirement?: Requirement;
   coverage?: EvidenceCoverage;
+  requirementState?: RequirementAssessmentState;
   applicationStageBlocked?: boolean;
   sharedOpportunityCount?: number;
 }
@@ -20,9 +22,9 @@ function priority(candidate: TaskCandidate, now: Date) {
     score += days <= 3 ? 100 : days <= 14 ? 70 : days <= 30 ? 40 : 10;
   }
 
-  if (candidate.requirement?.hardRequirement && candidate.coverage === "apparently-unmet") {
+  if (candidate.requirement?.hardRequirement && (candidate.requirementState ?? candidate.coverage) === "apparently-unmet") {
     score += 90;
-  } else if (candidate.requirement?.hardRequirement && candidate.coverage === "needs-confirmation") {
+  } else if (candidate.requirement?.hardRequirement && ["predicted", "unknown-grade", "unsupported-qualification", "needs-checking", "needs-confirmation"].includes(candidate.requirementState ?? candidate.coverage ?? "")) {
     score += 75;
   }
 

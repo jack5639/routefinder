@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 
+import { normalisePostLoginPath } from "@/lib/auth/return-path";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
-  const requestedNext = url.searchParams.get("next");
-  const nextPath = requestedNext?.startsWith("/") ? requestedNext : "/app";
+  const nextPath = normalisePostLoginPath(url.searchParams.get("next"));
   const supabase = await createClient();
 
   if (code && supabase) {

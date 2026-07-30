@@ -24,14 +24,22 @@ const responseSchema = z.object({
   vacancies: z.array(vacancySchema).optional(),
   items: z.array(vacancySchema).optional(),
   results: z.array(vacancySchema).optional(),
+  totalPages: z.number().optional(),
+  pageCount: z.number().optional(),
+  totalResults: z.number().optional(),
+  hasNextPage: z.boolean().optional(),
 }).passthrough();
 
-function sectorFor(text: string) {
+export function classifyApprenticeshipSector(text: string): { sector: "technology" | "engineering" | "business" | "finance" | "unclassified"; reason: string } {
   const value = text.toLowerCase();
-  if (/engineer|manufactur|mechanic|aerospace|electrical/.test(value)) return "engineering";
-  if (/account|bank|finance|audit|tax|insurance/.test(value)) return "finance";
-  if (/business|management|sales|marketing|project/.test(value)) return "business";
-  return "technology";
+  const matches = [
+    ["engineering", /engineer|manufactur|mechanic|aerospace|electrical|civil engineering/],
+    ["finance", /account|bank|finance|audit|tax|insurance|actuar/],
+    ["technology", /software|cyber|digital|data |computer|it support|information technology/],
+    ["business", /business|management|sales|marketing|project management|human resources/],
+  ].filter(([, pattern]) => (pattern as RegExp).test(value)) as Array<["technology" | "engineering" | "business" | "finance", RegExp]>;
+  if (matches.length !== 1) return { sector: "unclassified", reason: matches.length ? "ambiguous-sector-keywords" : "no-launch-sector-keywords" };
+  return { sector: matches[0][0], reason: `keyword:${matches[0][1].source}` };
 }
 
 export interface ApprenticeshipDraft {
@@ -44,25 +52,38 @@ export interface ApprenticeshipDraft {
   applicationUrl: string;
   sourceUrl: string;
   retrievedAt: string;
-  sector: "technology" | "engineering" | "business" | "finance";
+  sector: "technology" | "engineering" | "business" | "finance" | "unclassified";
+  classificationReason: string;
   rawSnapshot: unknown;
 }
 
-export async function fetchApprenticeshipDrafts(apiKey: string, page = 1): Promise<ApprenticeshipDraft[]> {
+export async function fetchApprenticeshipDrafts(apiKey: string, options: { maxPages?: number; fetcher?: typeof fetch } = {}): Promise<{ drafts: ApprenticeshipDraft[]; complete: boolean }> {
+  const fetcher = options.fetcher ?? fetch;
+  const maxPages = options.maxPages ?? 100;
+  const all: ApprenticeshipDraft[] = [];
+  let page = 1;
+  let complete = false;
+  while (page <= maxPages) {
   const sourceUrl = new URL("https://api.apprenticeships.education.gov.uk/vacancies");
   sourceUrl.searchParams.set("PageNumber", String(page));
   sourceUrl.searchParams.set("PageSize", "100");
-  const response = await fetch(sourceUrl, {
-    headers: { "Ocp-Apim-Subscription-Key": apiKey, "X-Version": "2" },
-    signal: AbortSignal.timeout(20_000),
-  });
+  let response: Response | undefined;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const candidate = await fetcher(sourceUrl, { headers: { "Ocp-Apim-Subscription-Key": apiKey, "X-Version": "2" }, signal: AbortSignal.timeout(20_000) });
+      if (candidate.ok || ![429, 500, 502, 503, 504].includes(candidate.status) || attempt === 2) { response = candidate; break; }
+    } catch (error) { if (attempt === 2) throw error; }
+    await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+  }
+  if (!response) throw new Error("display-api-no-response");
   if (!response.ok) throw new Error(`display-api-${response.status}`);
   const parsed = responseSchema.parse(await response.json());
   const vacancies = parsed.vacancies ?? parsed.items ?? parsed.results ?? [];
   const retrievedAt = new Date().toISOString();
-  return vacancies.map((vacancy) => {
+  all.push(...vacancies.map((vacancy) => {
     const address = vacancy.addresses?.[0] ?? vacancy.address;
     const official = vacancy.vacancyUrl ?? vacancy.applicationUrl ?? `https://www.findapprenticeship.service.gov.uk/apprenticeship/VAC${vacancy.vacancyReference}`;
+    const classification = classifyApprenticeshipSector(`${vacancy.title} ${vacancy.route ?? ""} ${vacancy.course?.title ?? ""}`);
     return {
       sourceId: vacancy.vacancyReference,
       title: vacancy.title,
@@ -73,8 +94,15 @@ export async function fetchApprenticeshipDrafts(apiKey: string, page = 1): Promi
       applicationUrl: official,
       sourceUrl: official,
       retrievedAt,
-      sector: sectorFor(`${vacancy.title} ${vacancy.route ?? ""} ${vacancy.course?.title ?? ""}`),
+      sector: classification.sector,
+      classificationReason: classification.reason,
       rawSnapshot: vacancy,
     };
-  });
+  }));
+  const totalPages = parsed.totalPages ?? parsed.pageCount;
+  if (parsed.hasNextPage === false || (totalPages !== undefined && page >= totalPages) || (parsed.hasNextPage === undefined && totalPages === undefined && vacancies.length < 100)) { complete = true; break; }
+  page += 1;
+  }
+  if (!complete) throw new Error("display-api-incomplete-pagination");
+  return { drafts: all, complete };
 }

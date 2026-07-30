@@ -37,7 +37,8 @@ The architecture optimises for:
 ```text
 Commercial browser
   -> Next.js commercial pages and authenticated API routes
-  -> Supabase email magic links and RLS-protected Postgres
+  -> read-only student Supabase role and server-owned validated mutations
+  -> RLS-protected Postgres with database relationship and entitlement enforcement
   -> deterministic five-view assessments and weekly prioritisation
   -> reviewed Postgres catalogue and publication workflow
   -> Stripe Checkout and signed webhook projection
@@ -203,6 +204,11 @@ Browser storage remains acceptable for low-risk prototype state. The local SQLit
 
 - Authenticated server-side storage is required before payments.
 - Use a transactional database appropriate for accounts, relationships, audit history, and deletion.
+- Authenticated browser/session roles may read only the rows and published catalogue columns they are authorised to see.
+- Commercial mutations pass through authenticated API routes and a server-only service-role client; the service-role key is never exposed to the browser.
+- A readiness profile and its qualification rows are replaced through one server-only transaction. Qualification identifiers and achieved, predicted, or unknown status are retained; a failed row mutation must not leave a partially updated profile.
+- Database constraints and triggers independently enforce user ownership, cross-object relationships, and concurrency-safe entitlement limits.
+- Database migrations revoke browser-role table and function privileges by default, then grant only explicitly reviewed read access and server RPC execution.
 - Keep database access behind repository or domain interfaces.
 - Treat provider selection as an implementation decision; do not leak provider SDKs through the UI.
 - Use migrations and backups.
@@ -226,6 +232,8 @@ See `adr/001-local-storage-boundary.md`.
 10. withdraw or mark stale records without erasing audit history.
 
 The official Find an Apprenticeship Display Vacancy Advert API is the preferred English vacancy source. Discover Uni/HESA may provide open university data within its licence. Comprehensive UCAS data requires an approved commercial basis.
+
+Commercial sync stores append-only source observations and pending field revisions. It may update a draft candidate, but it never overwrites a published fact: the public record remains authoritative until an authorised reviewer accepts a revision. A completed source snapshot may mark missing vacancies closed; partial or failed snapshots cannot. Scheduled source runs use the protected catalogue cron route and alert operations on failure or stale/backlogged review.
 
 ## Recommendation boundary
 
@@ -253,6 +261,8 @@ See `scoring-model.md`.
 - Return typed error states that distinguish unavailable, stale, incomplete, unauthorised, and invalid.
 - Do not expose internal prompts, credentials, raw provider errors, or unnecessary personal data.
 - Apply authentication and object-level authorisation server-side.
+- Treat an authenticated Supabase client as untrusted: do not grant it direct commercial table mutation or operational-function execution.
+- Scope every service-role update and deletion to the authenticated user or an independently authorised admin target.
 - Make writes idempotent where retries are likely.
 - Rate-limit expensive or abuse-prone endpoints.
 - Log correlation identifiers and safe operational metadata.
@@ -273,7 +283,9 @@ See `adr/002-verified-data-and-bounded-ai.md`.
 
 ## Security, privacy, and safety
 
-Implemented source-code controls include secure session handling, RLS, explicit server object authorisation, rate limits, allowlisted analytics, consent and audit records, export, deletion, redacted structured logging, signed payment webhooks, secure response headers, and fail-closed catalogue publication.
+Implemented source-code controls include secure session handling; read-only authenticated database roles; RLS; explicit server object authorisation; database-enforced relationship and entitlement checks; server-only rate limits, audit writes, and analytics writes; public catalogue column allowlists; consent records; export; deletion; redacted structured logging; signed payment webhooks; secure response headers; and fail-closed catalogue publication.
+
+Raw catalogue snapshots, source-run metadata, publication reviews, payment projections, rate-limit buckets, and operational analytics are not available through anonymous or authenticated Supabase clients. A requirement is publicly readable only while both it and its parent opportunity are published.
 
 Before commercial launch, external and specialist gates still require:
 
@@ -302,6 +314,8 @@ Current variables are listed in `.env.example`. The commercial groups are:
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | Server-only administrative database and auth operations |
 | `STRIPE_SECRET_KEY` | When payments open | Server-only Stripe API access |
 | `STRIPE_WEBHOOK_SECRET` | When payments open | Stripe webhook signature verification |
+| `STRIPE_EXPECTED_LIVEMODE` | When payments open | Explicitly pins webhook and checkout to Stripe test (`false`) or live (`true`) mode |
+| `PAYMENT_STAGING_*` | Staging integration test only | Isolated staging endpoint, Supabase service role, and Stripe test webhook secret; never production credentials |
 | `CRON_SECRET` | Production | Authorises entitlement-expiry jobs |
 | `ADMIN_EMAILS` | Production review | Catalogue-review allowlist |
 | `APPRENTICESHIP_API_KEY` | Catalogue sync | Official Display Advert API v2 |
@@ -317,7 +331,7 @@ Never add a secret value to `.env.example`.
 ### Unit
 
 - pure recommendation rules;
-- qualification and requirement evaluation;
+- qualification and requirement evaluation, including incomplete qualification records and retained qualification identities;
 - evidence mapping;
 - task prioritisation;
 - normalisation and state transitions;
@@ -328,6 +342,7 @@ Never add a secret value to `.env.example`.
 - catalogue imports, provenance, freshness, and conflict handling;
 - database repositories and migrations;
 - API validation and authorisation;
+- direct anonymous/authenticated Supabase denial, cross-user relationship rejection, and concurrent entitlement enforcement;
 - storage migration;
 - AI schema validation and fallbacks;
 - payment webhook idempotency.

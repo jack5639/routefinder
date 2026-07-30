@@ -24,6 +24,9 @@ export function buildStartingStrategy(profile: StudentProfile, qualifications: Q
   if (unknownSubjects.length) {
     observations.push(`${unknownSubjects.length} qualification detail${unknownSubjects.length === 1 ? "" : "s"} still need confirmation.`);
   }
+  if (!profile.qualificationsComplete) {
+    observations.push("Your qualification record is not complete, so missing qualifications will stay uncertain in comparisons.");
+  }
   if (profile.constraints.length) {
     observations.push("Your recorded constraints should stay visible in every comparison.");
   }
@@ -32,7 +35,7 @@ export function buildStartingStrategy(profile: StudentProfile, qualifications: Q
     observations,
     firstActions: [
       "Save three source-backed opportunities that are different enough to compare.",
-      unknownSubjects.length ? `Confirm the recorded detail for ${unknownSubjects[0].subject}.` : "Check one important requirement directly at its source.",
+      unknownSubjects.length ? `Confirm the recorded detail for ${unknownSubjects[0].subject}.` : !profile.qualificationsComplete ? "Add the remaining qualifications you want Routefinder to use for comparisons." : "Check one important requirement directly at its source.",
       "Add one genuine evidence example from a project, responsibility, or experience.",
     ],
     caveat: "This is a preparation sequence, not a route ranking or an application-outcome prediction.",

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-export function PurchaseButton() {
+export function PurchaseButton({ enabled = true }: { enabled?: boolean }) {
   const [message, setMessage] = useState("");
   async function purchase() {
     const response = await fetch("/api/checkout", { method: "POST" });
@@ -13,7 +13,7 @@ export function PurchaseButton() {
   }
   return (
     <div>
-      <button onClick={() => void purchase()} className="min-h-14 rounded-full bg-ink px-7 font-black text-white">Buy Cycle</button>
+      <button disabled={!enabled} onClick={() => void purchase()} className="min-h-14 rounded-full bg-ink px-7 font-black text-white disabled:cursor-not-allowed disabled:opacity-55">{enabled ? "Buy Cycle" : "Checkout unavailable"}</button>
       {message && <p role="alert" className="mt-3 text-sm font-bold text-coral">{message}</p>}
     </div>
   );

@@ -12,11 +12,18 @@ import type {
   StudentProfile,
   EligibilityState,
 } from "@/lib/mvp/types";
+import { evaluateEligibilityRule, parseEligibilityRule, type RuleEvaluation } from "@/lib/scoring/eligibility-rules";
+import { assessOpportunityRequirements, type OpportunityRequirementAssessment } from "@/lib/mvp/requirement-assessment";
 
 export interface EvidenceLinkSummary {
+  id?: string;
+  evidenceId?: string;
   requirementId: string;
   coverage: EvidenceCoverage;
   confirmedByStudent: boolean;
+  missingSpecificity?: string;
+  assessmentVersion?: number;
+  archived?: boolean;
 }
 
 export interface AssessmentInput {
@@ -25,26 +32,8 @@ export interface AssessmentInput {
   opportunity: Opportunity;
   evidenceLinks: EvidenceLinkSummary[];
   portfolioSize: number;
+  requirementAssessment?: OpportunityRequirementAssessment;
 }
-
-const gradeValue: Record<string, number> = {
-  "9": 13,
-  "8": 12,
-  "7": 11,
-  "6": 10,
-  "5": 9,
-  "4": 8,
-  "3": 7,
-  "2": 6,
-  "1": 5,
-  "U": 0,
-  "A*": 13,
-  A: 12,
-  B: 10,
-  C: 8,
-  D: 6,
-  E: 4,
-};
 
 function baseExplanation<TState extends string>(state: TState): DecisionExplanation<TState> {
   return {
@@ -52,6 +41,8 @@ function baseExplanation<TState extends string>(state: TState): DecisionExplanat
     reasons: [],
     risks: [],
     missingInformation: [],
+    evaluatedPreferences: [],
+    unassessedPreferences: [],
     sourceFacts: [],
     directCheckAction: "Check the latest requirement directly with the provider or employer.",
   };
@@ -65,20 +56,10 @@ function requirementSourceFacts(requirements: Requirement[]) {
   }));
 }
 
-function findQualification(requirement: Requirement, qualifications: Qualification[]) {
-  const requiredSubject = String(requirement.structuredValue?.subject ?? "").toLowerCase();
-  const requiredType = String(requirement.structuredValue?.qualificationType ?? "").toLowerCase();
-
-  return qualifications.find((qualification) => {
-    const subjectMatches = !requiredSubject || qualification.subject.toLowerCase().includes(requiredSubject);
-    const typeMatches = !requiredType || qualification.qualificationType.toLowerCase().includes(requiredType);
-    return subjectMatches && typeMatches;
-  });
-}
-
 export function evaluateEligibility(
   opportunity: Opportunity,
   qualifications: Qualification[],
+  qualificationsComplete = true,
 ): DecisionExplanation<EligibilityState> {
   const published = opportunity.requirements.filter((requirement) => requirement.publicationState === "published");
   const explanation = baseExplanation<EligibilityState>("unknown");
@@ -88,6 +69,18 @@ export function evaluateEligibility(
     explanation.state = "needs-checking";
     explanation.risks.push("This opportunity is recorded as closed.");
     explanation.directCheckAction = "Check the official listing before doing any application work.";
+    return explanation;
+  }
+
+  if (opportunity.publicationState !== "published" || opportunity.kind === "external") {
+    explanation.state = "needs-checking";
+    explanation.missingInformation.push("This opportunity has not completed Routefinder publication review.");
+    return explanation;
+  }
+
+  if (opportunity.requirements.some((requirement) => requirement.hardRequirement && requirement.publicationState !== "published")) {
+    explanation.state = "needs-checking";
+    explanation.missingInformation.push("A hard requirement is not yet reviewed and published.");
     return explanation;
   }
 
@@ -110,49 +103,37 @@ export function evaluateEligibility(
     return explanation;
   }
 
-  let sawPredictedMatch = false;
-  let sawUnknown = false;
-
-  for (const requirement of hardRequirements) {
-    const qualification = findQualification(requirement, qualifications);
-
-    if (!qualification) {
-      explanation.state = "appears-unmet";
-      explanation.risks.push(`No recorded qualification currently matches: ${requirement.label}.`);
-      return explanation;
+  const evaluations = hardRequirements.map((requirement): RuleEvaluation => {
+    if (requirement.kind !== "grade") {
+      return {
+        outcome: "unsupported-or-invalid",
+        messages: [`${requirement.label} is a hard requirement that Routefinder cannot compare deterministically yet.`],
+      };
     }
-
-    if (qualification.status === "unknown" || !qualification.grade) {
-      sawUnknown = true;
-      explanation.missingInformation.push(`A grade or result is still unknown for ${qualification.subject}.`);
-      continue;
+    const rule = parseEligibilityRule(requirement.structuredValue);
+    if (!rule) {
+      return {
+        outcome: "unsupported-or-invalid",
+        messages: [`${requirement.label} does not contain a supported, complete qualification rule.`],
+      };
     }
+    return evaluateEligibilityRule(rule, qualifications, qualificationsComplete);
+  });
 
-    const minimumGrade = String(requirement.structuredValue?.minimumGrade ?? "").toUpperCase();
-    const recordedGrade = qualification.grade.toUpperCase();
-
-    if (minimumGrade && gradeValue[recordedGrade] !== undefined && gradeValue[minimumGrade] !== undefined) {
-      if (gradeValue[recordedGrade] < gradeValue[minimumGrade]) {
-        explanation.state = "appears-unmet";
-        explanation.risks.push(`${qualification.subject} is recorded below the published minimum in the available information.`);
-        return explanation;
-      }
-    }
-
-    if (qualification.status === "predicted") {
-      sawPredictedMatch = true;
-    }
+  for (const evaluation of evaluations) {
+    if (evaluation.outcome === "unmet") explanation.risks.push(...evaluation.messages);
+    else if (evaluation.outcome === "unknown" || evaluation.outcome === "unsupported-or-invalid") explanation.missingInformation.push(...evaluation.messages);
+    else explanation.reasons.push(...evaluation.messages);
   }
 
-  if (sawUnknown) {
+  if (evaluations.some((evaluation) => evaluation.outcome === "unknown" || evaluation.outcome === "unsupported-or-invalid")) {
     explanation.state = "needs-checking";
-    explanation.reasons.push("Some recorded qualifications align, but a material result is still unknown.");
-  } else if (sawPredictedMatch) {
+  } else if (evaluations.some((evaluation) => evaluation.outcome === "unmet")) {
+    explanation.state = "appears-unmet";
+  } else if (evaluations.some((evaluation) => evaluation.outcome === "met-predicted")) {
     explanation.state = "may-be-met";
-    explanation.reasons.push("Recorded predicted grades appear to align with the reviewed minimums.");
   } else {
     explanation.state = "appears-met";
-    explanation.reasons.push("Recorded achieved qualifications appear to align with the reviewed minimums.");
   }
 
   explanation.risks.push("Contextual, equivalent, or unrecorded requirements may still apply.");
@@ -163,11 +144,15 @@ export function evaluateFit(profile: StudentProfile, opportunity: Opportunity): 
   const explanation = baseExplanation<FitState>("mixed");
   let signals = 0;
 
-  if (profile.sectors.includes(opportunity.sector)) {
+  if (opportunity.sector !== "unclassified" && profile.sectors.includes(opportunity.sector)) {
     signals += 2;
-    explanation.reasons.push(`The opportunity is in your selected ${opportunity.sector} sector.`);
+    const message = `Sector: the opportunity is in your selected ${opportunity.sector} sector.`;
+    explanation.reasons.push(message);
+    explanation.evaluatedPreferences.push(message);
   } else {
-    explanation.risks.push("This sector is not currently selected in your readiness profile.");
+    const message = "Sector: this sector is not currently selected in your readiness profile.";
+    explanation.risks.push(message);
+    explanation.evaluatedPreferences.push(message);
   }
 
   const routeMatches =
@@ -177,21 +162,23 @@ export function evaluateFit(profile: StudentProfile, opportunity: Opportunity): 
 
   if (routeMatches) {
     signals += 1;
-    explanation.reasons.push("The opportunity matches your current route intention.");
+    const message = "Route intention: the opportunity matches your current route intention.";
+    explanation.reasons.push(message);
+    explanation.evaluatedPreferences.push(message);
   } else {
-    explanation.risks.push("The route type differs from your current intention, so it may be exploratory.");
+    const message = "Route intention: the route type differs from your current intention, so it may be exploratory.";
+    explanation.risks.push(message);
+    explanation.evaluatedPreferences.push(message);
   }
 
-  if (!profile.homeRegion) {
-    explanation.state = "insufficient-information";
-    explanation.missingInformation.push("Add a broad home region to make location fit more useful.");
-    return explanation;
-  }
-
-  if (profile.relocationPreference === "stay-local" && !opportunity.location.toLowerCase().includes(profile.homeRegion.toLowerCase())) {
-    explanation.risks.push("The recorded location may not fit your current travel or relocation preference.");
-    signals -= 1;
-  }
+  explanation.unassessedPreferences.push(
+    "Location and travel: this opportunity has no normalised area, distance, or travel-time information to compare with your broad home area and travel limit.",
+    "Relocation: this opportunity has no structured location or relocation information to compare with your preference.",
+    "Work styles: this opportunity has no structured work-pattern information to compare with your preferences.",
+    "Financial preference: this opportunity has no structured cost, pay, or debt information to compare with your preference.",
+    "Recorded constraints: free-text constraints cannot be matched safely without structured, source-backed opportunity facts.",
+  );
+  explanation.risks.push("This fit view currently assesses sector and route intention only; check the official listing for location, travel, work pattern, costs or pay, and constraint implications.");
 
   explanation.state = signals >= 3 ? "currently-strong" : signals <= 0 ? "currently-weaker" : "mixed";
   return explanation;
@@ -209,13 +196,14 @@ export function evaluateReadiness(
     return explanation;
   }
 
-  const linkByRequirement = new Map(evidenceLinks.map((link) => [link.requirementId, link]));
-  const hardMissing = published.some(
-    (requirement) => requirement.hardRequirement && linkByRequirement.get(requirement.id)?.coverage === "apparently-unmet",
-  );
-  const supported = published.filter((requirement) => linkByRequirement.get(requirement.id)?.coverage === "supported").length;
-  const weak = published.filter((requirement) => linkByRequirement.get(requirement.id)?.coverage === "weak").length;
-  const missing = published.length - supported - weak;
+  const coverageFor = (requirementId: string) => evidenceLinks.filter((link) => link.requirementId === requirementId && !link.archived);
+  const hardMissing = published.some((requirement) => requirement.hardRequirement && coverageFor(requirement.id).some((link) => link.coverage === "apparently-unmet"));
+  const supported = published.filter((requirement) => coverageFor(requirement.id).some((link) => link.coverage === "supported" && link.confirmedByStudent)).length;
+  const weak = published.filter((requirement) => coverageFor(requirement.id).some((link) => link.coverage === "weak" || Boolean(link.missingSpecificity))).length;
+  const missing = published.filter((requirement) => {
+    const links = coverageFor(requirement.id);
+    return !links.length || links.some((link) => link.coverage === "needs-confirmation") || !links.some((link) => link.coverage === "supported" && link.confirmedByStudent);
+  }).length;
 
   if (hardMissing) {
     explanation.state = "urgent-gaps";
@@ -225,7 +213,7 @@ export function evaluateReadiness(
     explanation.reasons.push("Every reviewed requirement has a student-confirmed evidence link.");
   } else if (supported > 0 || weak > 0) {
     explanation.state = "partly-supported";
-    explanation.reasons.push(`${supported} requirement${supported === 1 ? "" : "s"} currently have strong evidence coverage.`);
+    explanation.reasons.push(`${supported} requirement${supported === 1 ? "" : "s"} currently have confirmed evidence coverage.`);
     if (missing) {
       explanation.missingInformation.push(`${missing} requirement${missing === 1 ? "" : "s"} still need evidence or confirmation.`);
     }
@@ -275,8 +263,9 @@ export function evaluatePortfolioRole(
     explanation.state = portfolioSize >= 3 ? "currently-plausible" : "exploratory";
     explanation.reasons.push("Published minimums and current preferences appear reasonably aligned.");
   } else if (eligibility === "appears-met" && fit === "mixed") {
-    explanation.state = "lower-risk-backup";
-    explanation.reasons.push("Published minimums appear aligned, while preference fit is mixed.");
+    explanation.state = "qualification-aligned-alternative";
+    explanation.reasons.push("Published minimum qualifications appear aligned, while the currently assessed preference fit is mixed.");
+    explanation.risks.push("This role does not indicate likelihood, competitiveness, or risk.");
   } else {
     explanation.state = "exploratory";
     explanation.reasons.push("This option could help diversify the current comparison.");
@@ -286,7 +275,13 @@ export function evaluatePortfolioRole(
 }
 
 export function assessOpportunity(input: AssessmentInput): OpportunityAssessment {
-  const eligibility = evaluateEligibility(input.opportunity, input.qualifications);
+  const requirementAssessment = input.requirementAssessment ?? assessOpportunityRequirements(
+    input.opportunity,
+    input.qualifications,
+    input.profile.qualificationsComplete,
+    input.evidenceLinks,
+  );
+  const eligibility = requirementAssessment.eligibility;
   const fit = evaluateFit(input.profile, input.opportunity);
   const readiness = evaluateReadiness(input.opportunity.requirements, input.evidenceLinks);
   const informationConfidence = evaluateInformationConfidence(input.opportunity);

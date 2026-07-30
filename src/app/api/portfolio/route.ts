@@ -1,8 +1,16 @@
 import { NextResponse } from "next/server";
 
-import { apiError, consumeRateLimit, getApiContext, parseJson } from "@/lib/api-context";
+import {
+  apiError,
+  consumeRateLimit,
+  databaseErrorIs,
+  getApiContext,
+  getMutationApiContext,
+  parseJson,
+} from "@/lib/api-context";
 import { activePlan, canAddActiveOpportunity } from "@/lib/mvp/entitlements";
 import { portfolioCreateSchema } from "@/lib/mvp/schemas";
+import { publicOpportunityWithRequirements } from "@/lib/supabase/public-catalogue";
 
 export async function GET() {
   const context = await getApiContext();
@@ -11,7 +19,9 @@ export async function GET() {
 
   const { data, error } = await context.supabase
     .from("portfolio_items")
-    .select("*, opportunities(*, requirements(*)), applications(*)")
+    .select(
+      `id,user_id,opportunity_id,external_title,external_url,active,created_at,updated_at,opportunities(${publicOpportunityWithRequirements}),applications(*)`,
+    )
     .eq("user_id", context.user.id)
     .order("created_at");
 
@@ -20,7 +30,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const context = await getApiContext();
+  const context = await getMutationApiContext();
 
   if (!context) return apiError("Sign in to save an opportunity.", 401, "unauthorised");
   if (!(await consumeRateLimit(context, "portfolio-write", 30, 3600))) {
@@ -65,11 +75,18 @@ export async function POST(request: Request) {
           external_url: parsed.data.externalUrl,
         };
 
-  const { data, error } = await context.supabase.from("portfolio_items").insert(row).select("*").single();
+  const { data, error } = await context.admin.from("portfolio_items").insert(row).select("*").single();
 
+  if (databaseErrorIs(error, "entitlement_limit:active_opportunities")) {
+    return apiError(
+      `Your ${activePlan(entitlement as Parameters<typeof activePlan>[0])} plan has reached its active opportunity limit.`,
+      403,
+      "limit-reached",
+    );
+  }
   if (error) return apiError("This opportunity could not be saved.", 503, "unavailable");
 
-  await context.supabase.from("analytics_events").insert({
+  await context.admin.from("analytics_events").insert({
     user_id: context.user.id,
     event_name: "opportunity_saved",
     properties: { source: "opportunityId" in parsed.data ? "catalogue" : "external" },

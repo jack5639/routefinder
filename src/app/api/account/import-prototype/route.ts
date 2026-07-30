@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { apiError, getApiContext, parseJson } from "@/lib/api-context";
+import { apiError, consumeRateLimit, getMutationApiContext, parseJson } from "@/lib/api-context";
 
 const legacySchema = z.object({
   currentStage: z.enum(["Year 12", "Year 13"]),
@@ -16,8 +16,11 @@ const legacySchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const context = await getApiContext();
+  const context = await getMutationApiContext();
   if (!context) return apiError("Sign in before importing prototype data.", 401, "unauthorised");
+  if (!(await consumeRateLimit(context, "prototype-import", 5, 3600))) {
+    return apiError("Too many import attempts. Try again shortly.", 429, "rate-limited");
+  }
   const parsed = legacySchema.safeParse(await parseJson(request));
   if (!parsed.success) return apiError("No valid prototype readiness data was found.");
   const hash = createHash("sha256").update(JSON.stringify(parsed.data)).digest("hex");
@@ -36,7 +39,7 @@ export async function POST(request: Request) {
   const sectors = [...new Set(sectorMatches)];
   const mappedSectors = sectors.length ? sectors : ["technology"];
 
-  const { error: profileError } = await context.supabase.from("profiles").upsert({
+  const { error: profileError } = await context.admin.from("profiles").upsert({
     id: context.user.id,
     current_stage: parsed.data.currentStage,
     application_cycle: 2027,
@@ -48,13 +51,14 @@ export async function POST(request: Request) {
     work_styles: parsed.data.workStyles,
     financial_preference: parsed.data.debtPreference === "avoid" ? "prefer-lower-debt" : parsed.data.debtPreference === "some-concern" ? "cost-aware" : "open",
     constraints: parsed.data.constraints,
+    qualifications_complete: false,
     updated_at: new Date().toISOString(),
   });
   if (profileError) return apiError("Prototype data could not be imported.", 503, "unavailable");
 
-  await context.supabase.from("qualifications").delete().eq("user_id", context.user.id);
+  await context.admin.from("qualifications").delete().eq("user_id", context.user.id);
   if (parsed.data.subjects.length) {
-    await context.supabase.from("qualifications").insert(
+    await context.admin.from("qualifications").insert(
       parsed.data.subjects.map((subject) => ({
         user_id: context.user.id,
         qualification_type: "Check qualification type",
@@ -63,12 +67,12 @@ export async function POST(request: Request) {
       })),
     );
   }
-  await context.supabase.from("prototype_imports").insert({
+  await context.admin.from("prototype_imports").insert({
     user_id: context.user.id,
     source_key: "routefinder.quizAnswers.v1",
     source_hash: hash,
   });
-  await context.supabase.from("audit_events").insert({
+  await context.admin.from("audit_events").insert({
     user_id: context.user.id,
     action: "prototype.imported",
     entity_type: "profile",

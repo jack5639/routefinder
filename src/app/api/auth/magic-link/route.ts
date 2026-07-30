@@ -3,12 +3,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { apiError, parseJson } from "@/lib/api-context";
+import { normalisePostLoginPath } from "@/lib/auth/return-path";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 const requestSchema = z.object({
   email: z.string().email().max(320),
-  nextPath: z.string().startsWith("/").max(300),
+  nextPath: z.unknown().optional(),
 });
 
 export async function POST(request: Request) {
@@ -31,7 +32,8 @@ export async function POST(request: Request) {
   const supabase = await createClient();
   if (!supabase) return apiError("Account services are not configured in this environment.", 503, "configuration-required");
   const origin = process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin;
-  const redirectTo = `${origin}/auth/callback?next=${encodeURIComponent(parsed.data.nextPath)}`;
+  const nextPath = normalisePostLoginPath(parsed.data.nextPath);
+  const redirectTo = `${origin}/auth/callback?next=${encodeURIComponent(nextPath)}`;
   const { error } = await supabase.auth.signInWithOtp({
     email: parsed.data.email,
     options: { emailRedirectTo: redirectTo, shouldCreateUser: true },

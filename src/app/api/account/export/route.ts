@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { apiError, getApiContext } from "@/lib/api-context";
+import { apiError, getMutationApiContext } from "@/lib/api-context";
 
 const exportedTables = [
   "profiles",
@@ -22,12 +22,12 @@ const exportedTables = [
 ] as const;
 
 export async function GET() {
-  const context = await getApiContext();
+  const context = await getMutationApiContext();
   if (!context) return apiError("Sign in to export your data.", 401, "unauthorised");
 
   const entries = await Promise.all(
     exportedTables.map(async (table) => {
-      const query = context.supabase.from(table).select("*");
+      const query = context.admin.from(table).select("*");
       const result = table === "profiles" ? await query.eq("id", context.user.id) : await query.eq("user_id", context.user.id);
       if (result.error) throw result.error;
       return [table, result.data ?? []] as const;
@@ -36,7 +36,7 @@ export async function GET() {
 
   if (!entries) return apiError("Your export is temporarily unavailable.", 503, "unavailable");
 
-  await context.supabase.from("analytics_events").insert({
+  await context.admin.from("analytics_events").insert({
     user_id: context.user.id,
     event_name: "export_requested",
     properties: {},
