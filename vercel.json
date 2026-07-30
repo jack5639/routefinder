@@ -1,0 +1,26 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["lhr1"],
+  "functions": {
+    "src/app/api/admin/catalogue/sync/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/cron/catalogue/route.ts": {
+      "maxDuration": 60
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/expiry",
+      "schedule": "17 2 * * *"
+    },
+    {
+      "path": "/api/cron/catalogue?source=apprenticeships",
+      "schedule": "23 */6 * * *"
+    },
+    {
+      "path": "/api/cron/catalogue?source=discover-uni",
+      "schedule": "41 3 * * 3"
+    }
+  ]
+}

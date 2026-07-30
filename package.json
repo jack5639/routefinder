@@ -6,22 +6,34 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:component": "vitest run src/**/*.component.test.tsx",
+    "test:supabase-security": "node scripts/verify-supabase-security.mjs",
     "docs:check": "node scripts/check-docs.mjs",
     "test:watch": "vitest",
     "data:init": "node scripts/catalog/run-catalog-command.mjs init",
     "data:sync": "node scripts/catalog/run-catalog-command.mjs sync",
     "data:status": "node scripts/catalog/run-catalog-command.mjs status",
-    "data:agent": "node scripts/catalog/run-catalog-command.mjs agent"
+    "data:agent": "node scripts/catalog/run-catalog-command.mjs agent",
+    "db:restore-test": "node scripts/verify-backup-restore.mjs"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.3",
+    "@supabase/supabase-js": "^2.110.9",
+    "fflate": "^0.8.3",
     "next": "^16.2.10",
     "openai": "^6.45.0",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "stripe": "^22.3.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.0",
+    "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^26.1.0",
     "@types/react": "^19.2.17",
@@ -30,6 +42,7 @@
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.2.10",
     "jiti": "^1.21.7",
+    "jsdom": "^30.0.0",
     "postcss": "^8.5.16",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.9.2",

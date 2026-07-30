@@ -8,27 +8,33 @@ Routefinder is a decision and preparation aid. It does not predict admission, re
 
 ## Repository status
 
-This repository currently contains a working prototype and the foundations of a source-backed catalogue. It is not yet the paid commercial product described in the strategy.
+This repository contains the customer-ready MVP implementation scheduled for 15 October 2026, alongside a clearly separated compatibility demo. External infrastructure, reviewed launch catalogue content, production credentials, and specialist approvals are still release gates.
 
-Implemented today:
+Commercial MVP implementation:
 
-- five-question browser-saved route quiz;
-- deterministic route-family scoring and recommendation feedback;
-- results decision board;
-- route roadmaps, one saved roadmap, simulator, and parent summary;
-- clearly labelled demo route families;
-- local SQLite catalogue, source runs, snapshots, freshness status, and API boundaries;
-- prototype UCAS, Discover Uni, and Find an Apprenticeship source adapters;
-- structured AI roadmap generation with a template fallback;
-- Vitest coverage for scoring, storage, catalogue, personas, and generation boundaries.
+- Supabase email magic-link authentication, protected pages, Postgres migrations, RLS, audit and consent records;
+- readiness check with explicit unknown qualification states;
+- published-opportunity search, official apprenticeship API ingestion, Discover Uni archive verification, manual provider-source entry, and fail-closed publication review;
+- five deterministic decision views with source facts, risks, missing information, and direct-check actions;
+- server-owned portfolio, evidence bank, requirement mapping, weekly actions, and application tracker;
+- Free and Cycle limits, one-time Stripe Checkout, signed idempotent webhooks, refunds, disputes, and cycle expiry;
+- allowlisted analytics, source reporting, JSON export, explicit prototype import, and account deletion;
+- commercial landing, pricing, source-backed guides, policy baselines, health checks, secure headers, redacted logging, CI, component tests, and browser-test infrastructure.
 
-Important limitations:
+Compatibility demo implementation:
 
-- saved student state is browser-only and device-specific;
-- authentication, payments, entitlements, secure user storage, evidence mapping, and application tracking are not implemented;
-- source adapters are prototypes and are not approved commercial data integrations;
-- demo records must not be presented as verified opportunities;
-- the current total-score UI is a migration target, not the intended commercial recommendation model.
+- browser-saved route quiz, route-family scoring, roadmaps, saved roadmap, simulator, and parent summary;
+- clearly labelled demo catalogue data and local SQLite catalogue development;
+- legacy experimental AI roadmap endpoint with a deterministic fallback.
+
+Release gates not satisfiable from source code alone:
+
+- create and configure separate London-region staging and production Supabase projects;
+- connect separate Vercel preview and production projects and production domain;
+- provide Stripe and official catalogue credentials;
+- populate and review the minimum launch catalogue without demo records;
+- complete specialist legal, privacy, safeguarding, accessibility, refund, complaint, and retention review;
+- run and record production restore, security, accessibility, payment, catalogue, and smoke-test exercises.
 
 ## Start here
 
@@ -53,15 +59,17 @@ pnpm dev
 
 Open the local URL printed by Next.js, normally `http://localhost:3000`.
 
-`OPENAI_API_KEY` is optional. Without it, generated roadmaps use the deterministic template fallback.
+`OPENAI_API_KEY` is optional and applies only to the legacy demo. Generative AI is not part of the commercial MVP.
 
 ## Quality checks
 
 ```bash
 pnpm test
 pnpm lint
+pnpm typecheck
 pnpm build
 pnpm docs:check
+pnpm test:e2e
 ```
 
 Run the relevant checks before handing off a change. `docs:check` validates required documents, internal links, the documentation index, retired duplicate plans, conflict markers, and `.env.example` coverage. If the environment prevents a check, report that limitation rather than implying success.
@@ -77,13 +85,24 @@ pnpm data:agent
 
 The catalogue defaults to `data/catalog/catalog.sqlite`. Local databases and snapshots are ignored by Git.
 
-The current source adapters fetch and parse public pages for prototype validation. Do not operate them as the commercial data pipeline. The target data policy requires approved APIs, open datasets with attribution, licensed data where necessary, provenance, freshness, conflict handling, and human review for high-impact requirements.
+The local commands above are for the compatibility catalogue. Commercial ingestion uses the Find an Apprenticeship Display Advert API v2 and the Discover Uni/HESA dataset boundary, then requires human publication review. Do not use the prototype HTML parsers commercially.
 
 ## Current route map
 
 | Route | Current purpose |
 | --- | --- |
-| `/` | Prototype landing and onboarding |
+| `/` | Commercial landing page |
+| `/demo` | Clearly labelled prototype entry |
+| `/signin` | Supabase email magic-link sign-in |
+| `/readiness` | Authenticated readiness check |
+| `/app` | Authenticated `This Week` home |
+| `/opportunities` | Published commercial opportunity search |
+| `/portfolio` | Five decision views and gap map |
+| `/evidence` | Evidence bank and requirement mapping |
+| `/tracker` | Application tracker |
+| `/account` | Entitlement, export, explicit import, deletion, and sign-out |
+| `/admin/catalogue` | Allowlisted internal source and publication review |
+| `/pricing` | Free and one-time Cycle offer |
 | `/quiz` | Browser-saved route quiz |
 | `/results` | Deterministic comparison board |
 | `/roadmap/[routeId]` | Route-specific prototype roadmap |
@@ -105,8 +124,11 @@ src/data/roadmaps/          Prototype deterministic roadmap templates
 src/data/test-personas/     Broad recommendation test personas
 src/lib/scoring/            Pure scoring and recommendation logic
 src/lib/catalog/            Catalogue ingestion, SQLite, queries, and freshness
+src/lib/catalog/commercial/ Commercial official-source ingestion boundaries
+src/lib/mvp/                Commercial schemas, entitlements, tasks, and types
 src/lib/*-storage.ts        Prototype browser-persistence boundaries
 scripts/catalog/            Catalogue command entry point
+supabase/                   Postgres migrations, local configuration, and seed
 docs/                       Product, architecture, recommendation, and ADR sources of truth
 ```
 

@@ -2,7 +2,7 @@
 
 Last reviewed: 29 July 2026
 
-Status: authoritative technical direction. Sections explicitly labelled current describe the repository today; target sections describe the first commercial architecture.
+Status: authoritative technical direction. Current sections describe the repository today; release-gate sections distinguish source-complete work from external production work.
 
 ## Architectural goals
 
@@ -32,19 +32,25 @@ The architecture optimises for:
 - Node's built-in SQLite support for the local catalogue
 - OpenAI SDK for optional structured roadmap generation
 
-### Current request flow
+### Current request flows
 
 ```text
-Browser
-  -> Next.js pages
+Commercial browser
+  -> Next.js commercial pages and authenticated API routes
+  -> read-only student Supabase role and server-owned validated mutations
+  -> RLS-protected Postgres with database relationship and entitlement enforcement
+  -> deterministic five-view assessments and weekly prioritisation
+  -> reviewed Postgres catalogue and publication workflow
+  -> Stripe Checkout and signed webhook projection
+
+Compatibility demo browser
   -> browser storage hooks for quiz, feedback, and saved roadmap
-  -> deterministic scoring in src/lib/scoring
-  -> catalogue API routes
+  -> legacy deterministic route-family scoring
   -> local SQLite catalogue when available
   -> clearly labelled demo route families as fallback
 ```
 
-The current implementation is a prototype. It does not provide authenticated user accounts, durable student records, payments, entitlements, evidence mapping, or an application tracker.
+The commercial implementation now provides the source-code boundary for accounts, durable student records, evidence mapping, applications, entitlements, payments, export, deletion, reviewed catalogue records, and operational controls. It is not a production service until external projects, credentials, reviewed catalogue content, specialist approvals, restore evidence, and production release checks pass. The browser-only prototype remains available under the demo boundary.
 
 ### Current module boundaries
 
@@ -54,6 +60,9 @@ The current implementation is a prototype. It does not provide authenticated use
 | UI components | `src/components` | Reusable presentation and interaction |
 | Scoring | `src/lib/scoring` | Pure deterministic scoring, board construction, feedback, and simulator comparison |
 | Catalogue | `src/lib/catalog` | Source adapters, import, SQLite schema, queries, status, and freshness |
+| Commercial MVP domain | `src/lib/mvp` | Validated schemas, entitlements, payment ordering, task selection, and commercial types |
+| Commercial persistence | `supabase` and authenticated API routes | Postgres migrations, RLS, auth, user data, catalogue publication, payment projection, export, and deletion |
+| Commercial official sources | `src/lib/catalog/commercial` | Display Advert API v2 and Discover Uni dataset boundaries |
 | Browser persistence | `src/lib/*-storage.ts` | Normalised local save/load/clear operations and events |
 | Client hooks | `src/lib/use-*` | React access to browser or catalogue state |
 | Demo data | `src/data/routes` | Broad prototype route families only |
@@ -62,7 +71,7 @@ The current implementation is a prototype. It does not provide authenticated use
 
 Reusable domain logic must not move into pages or components.
 
-## Current catalogue boundary
+## Compatibility catalogue boundary
 
 The local catalogue uses SQLite tables for:
 
@@ -74,19 +83,18 @@ The local catalogue uses SQLite tables for:
 - tags;
 - derived route families.
 
-It stores raw records, snapshots, hashes, first/last-seen timestamps, and freshness status. This is a useful ingestion prototype, but it does not yet meet the final product's complete requirement-provenance model.
+It stores raw records, snapshots, hashes, first/last-seen timestamps, and freshness status. It is a development and compatibility system, not the commercial catalogue.
 
-### Current source-adapter limitations
+### Compatibility source-adapter limitations
 
 - The UCAS adapter parses public HTML and is not an approved commercial integration.
 - The Find an Apprenticeship adapter parses search HTML rather than using the official display API.
 - The Discover Uni adapter currently records source pages and does not import the published dataset.
-- Requirements are not yet represented as independently sourced, reviewable facts.
-- Publication approval and human-review states are incomplete.
+- These limitations apply only to the legacy local path. Commercial Postgres records represent requirements independently and fail closed at publication.
 
 Do not increase dependence on these HTML shapes. Replace the adapters behind the existing source boundary with approved integrations.
 
-## Target commercial architecture
+## Implemented commercial architecture
 
 ```text
 Mobile-first web client
@@ -97,17 +105,15 @@ Mobile-first web client
      -> task and deadline service
      -> application-tracker service
      -> entitlement service
-     -> notification service
   -> recommendation engine
      -> deterministic eligibility rules
      -> explainable fit rules
      -> readiness and portfolio classification
-     -> bounded AI personalisation
   -> catalogue query service
      -> reviewed structured facts
      -> provenance and freshness
      -> approved-source ingestion jobs
-  -> operational audit and analytics
+  -> allowlisted operational audit and analytics
 ```
 
 These are logical boundaries, not a requirement to deploy separate services. Begin as a modular monolith and extract services only when operational evidence justifies it.
@@ -132,7 +138,7 @@ Consumes a student profile, reviewed opportunity facts, and student-owned eviden
 
 It does not persist billing state or mutate verified catalogue facts.
 
-### AI boundary
+### Post-MVP AI boundary
 
 Receives the minimum structured context required for one task. Inputs and outputs are schema-validated. It may personalise explanations, suggested actions, feedback, and practice. It may not become a fact store, eligibility engine, or autonomous publisher.
 
@@ -146,7 +152,7 @@ Components should query entitlements through one interface rather than embedding
 
 Receives defined product events with data minimisation. Product analytics must not become an undeclared student-profile store. Sensitive free text and application content should not be copied into analytics events.
 
-## Target data model
+## Commercial data model
 
 The first commercial model needs at least these concepts:
 
@@ -164,7 +170,6 @@ The first commercial model needs at least these concepts:
 - `PortfolioItem`
 - `Task`
 - `Application`
-- `ShareGrant`
 - `ConsentRecord`
 - `Entitlement`
 - `SourceRun`
@@ -195,10 +200,15 @@ AI-extracted text remains a draft until the publication rule for that fact is sa
 
 Browser storage remains acceptable for low-risk prototype state. The local SQLite catalogue remains acceptable for development and ingestion validation.
 
-### Commercial target
+### Commercial implementation
 
 - Authenticated server-side storage is required before payments.
 - Use a transactional database appropriate for accounts, relationships, audit history, and deletion.
+- Authenticated browser/session roles may read only the rows and published catalogue columns they are authorised to see.
+- Commercial mutations pass through authenticated API routes and a server-only service-role client; the service-role key is never exposed to the browser.
+- A readiness profile and its qualification rows are replaced through one server-only transaction. Qualification identifiers and achieved, predicted, or unknown status are retained; a failed row mutation must not leave a partially updated profile.
+- Database constraints and triggers independently enforce user ownership, cross-object relationships, and concurrency-safe entitlement limits.
+- Database migrations revoke browser-role table and function privileges by default, then grant only explicitly reviewed read access and server RPC execution.
 - Keep database access behind repository or domain interfaces.
 - Treat provider selection as an implementation decision; do not leak provider SDKs through the UI.
 - Use migrations and backups.
@@ -208,7 +218,7 @@ Browser storage remains acceptable for low-risk prototype state. The local SQLit
 
 See `adr/001-local-storage-boundary.md`.
 
-## Catalogue ingestion target
+## Catalogue ingestion workflow
 
 1. Fetch an approved source.
 2. Store source-run metadata and permitted raw evidence.
@@ -223,9 +233,11 @@ See `adr/001-local-storage-boundary.md`.
 
 The official Find an Apprenticeship Display Vacancy Advert API is the preferred English vacancy source. Discover Uni/HESA may provide open university data within its licence. Comprehensive UCAS data requires an approved commercial basis.
 
-## Recommendation migration
+Commercial sync stores append-only source observations and pending field revisions. It may update a draft candidate, but it never overwrites a published fact: the public record remains authoritative until an authorised reviewer accepts a revision. A completed source snapshot may mark missing vacancies closed; partial or failed snapshots cannot. Scheduled source runs use the protected catalogue cron route and alert operations on failure or stale/backlogged review.
 
-The current prototype computes fit, feasibility, constraint, confidence, and a weighted total. The commercial model must migrate to separate decision views:
+## Recommendation boundary
+
+The compatibility prototype computes fit, feasibility, constraint, confidence, and a weighted total. The commercial implementation uses separate decision views:
 
 1. eligibility;
 2. fit;
@@ -233,13 +245,12 @@ The current prototype computes fit, feasibility, constraint, confidence, and a w
 4. information confidence;
 5. portfolio role.
 
-During migration:
+The implemented boundary:
 
 - keep legacy routes working;
 - make demo and legacy calculations visible as prototype-only;
-- add the new typed outputs alongside the old model;
-- migrate pages incrementally;
-- remove the total score from the commercial UI once all consumers use the new model;
+- keeps the new typed outputs alongside the old model;
+- excludes the total score and legacy “Strong fit” language from commercial pages;
 - retain deterministic tests for legacy compatibility until the old consumers are removed.
 
 See `scoring-model.md`.
@@ -250,12 +261,14 @@ See `scoring-model.md`.
 - Return typed error states that distinguish unavailable, stale, incomplete, unauthorised, and invalid.
 - Do not expose internal prompts, credentials, raw provider errors, or unnecessary personal data.
 - Apply authentication and object-level authorisation server-side.
+- Treat an authenticated Supabase client as untrusted: do not grant it direct commercial table mutation or operational-function execution.
+- Scope every service-role update and deletion to the authenticated user or an independently authorised admin target.
 - Make writes idempotent where retries are likely.
 - Rate-limit expensive or abuse-prone endpoints.
 - Log correlation identifiers and safe operational metadata.
 - Keep route handlers thin and move reusable behaviour into domain modules.
 
-## AI implementation rules
+## Post-MVP AI implementation rules
 
 - Use a narrow task-specific prompt and the smallest necessary input.
 - Require structured output schemas.
@@ -270,17 +283,17 @@ See `adr/002-verified-data-and-bounded-ai.md`.
 
 ## Security, privacy, and safety
 
-Before commercial launch:
+Implemented source-code controls include secure session handling; read-only authenticated database roles; RLS; explicit server object authorisation; database-enforced relationship and entitlement checks; server-only rate limits, audit writes, and analytics writes; public catalogue column allowlists; consent records; export; deletion; redacted structured logging; signed payment webhooks; secure response headers; and fail-closed catalogue publication.
+
+Raw catalogue snapshots, source-run metadata, publication reviews, payment projections, rate-limit buckets, and operational analytics are not available through anonymous or authenticated Supabase clients. A requirement is publicly readable only while both it and its parent opportunity are published.
+
+Before commercial launch, external and specialist gates still require:
 
 - complete threat modelling and a Data Protection Impact Assessment;
 - document lawful bases, retention, subprocessors, and international transfers;
-- implement secure sessions and role-based access;
 - encrypt in transit and at rest;
 - protect state-changing requests;
-- rate-limit authentication and AI endpoints;
-- implement audit logs, export, deletion, and incident handling;
-- make student sharing explicit, scoped, revocable, and visible;
-- keep analytics free of sensitive application content;
+- configure infrastructure controls and test cross-user access against staging;
 - conduct accessibility testing against WCAG 2.2 AA;
 - obtain specialist legal and data-protection review.
 
@@ -290,11 +303,23 @@ Do not treat this document as legal advice.
 
 All supported local variables must be documented in `.env.example`.
 
-Current variables:
+Current variables are listed in `.env.example`. The commercial groups are:
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `OPENAI_API_KEY` | No | Enables optional structured roadmap generation |
+| `NEXT_PUBLIC_APP_URL` | Yes | Canonical application origin and auth redirects |
+| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Public Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Public Supabase anonymous key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Server-only administrative database and auth operations |
+| `STRIPE_SECRET_KEY` | When payments open | Server-only Stripe API access |
+| `STRIPE_WEBHOOK_SECRET` | When payments open | Stripe webhook signature verification |
+| `STRIPE_EXPECTED_LIVEMODE` | When payments open | Explicitly pins webhook and checkout to Stripe test (`false`) or live (`true`) mode |
+| `PAYMENT_STAGING_*` | Staging integration test only | Isolated staging endpoint, Supabase service role, and Stripe test webhook secret; never production credentials |
+| `CRON_SECRET` | Production | Authorises entitlement-expiry jobs |
+| `ADMIN_EMAILS` | Production review | Catalogue-review allowlist |
+| `APPRENTICESHIP_API_KEY` | Catalogue sync | Official Display Advert API v2 |
+| `DISCOVER_UNI_DATASET_URL` | Catalogue sync | Approved current HESA archive URL |
 | `CATALOG_DB_PATH` | No | Overrides the local SQLite catalogue path |
 | `CATALOG_APPRENTICESHIP_SYNC_MINUTES` | No | Prototype apprenticeship sync interval |
 | `CATALOG_UNIVERSITY_SYNC_HOUR` | No | Prototype daily university sync hour in local process time |
@@ -306,7 +331,7 @@ Never add a secret value to `.env.example`.
 ### Unit
 
 - pure recommendation rules;
-- qualification and requirement evaluation;
+- qualification and requirement evaluation, including incomplete qualification records and retained qualification identities;
 - evidence mapping;
 - task prioritisation;
 - normalisation and state transitions;
@@ -317,6 +342,7 @@ Never add a secret value to `.env.example`.
 - catalogue imports, provenance, freshness, and conflict handling;
 - database repositories and migrations;
 - API validation and authorisation;
+- direct anonymous/authenticated Supabase denial, cross-user relationship rejection, and concurrent entitlement enforcement;
 - storage migration;
 - AI schema validation and fallbacks;
 - payment webhook idempotency.
@@ -334,22 +360,19 @@ Test critical mobile flows, keyboard interaction, loading, empty, stale, conflic
 ```bash
 pnpm test
 pnpm lint
+pnpm typecheck
 pnpm build
 pnpm docs:check
+pnpm test:e2e
 ```
 
-## Delivery sequence
+## Remaining production sequence
 
-1. Preserve repository health and prototype compatibility.
-2. Add authentication, server persistence, consent, export, and deletion.
-3. Integrate a narrow approved real catalogue.
-4. Add the five decision views.
-5. Build evidence and requirement mapping.
-6. Add `This Week`, tasks, deadlines, and the application tracker.
-7. Add analytics and source-issue reporting.
-8. Add payments and central entitlement checks.
-9. Add bounded AI feedback and practice.
-10. Add controlled sharing.
-11. Add the minimum institutional view needed for paid pilots.
+1. Create and connect separate Vercel preview/production and London Supabase staging/production projects.
+2. Apply migrations, configure secrets, and run staging auth, RLS, payment, restore, and cross-user tests.
+3. Import, manually verify, and spot-check the minimum source-backed launch catalogue.
+4. Complete specialist policy, DPIA, safeguarding, retention, accessibility, and threat-model review.
+5. Run the complete production smoke and launch-gate evidence checklist in `operations.md`.
+6. Add bounded AI feedback, controlled sharing, and institutional capabilities only as separately approved post-MVP work.
 
 The commercial validation gates and dated execution plan are in `product-decisions.md`.

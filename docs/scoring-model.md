@@ -43,6 +43,10 @@ Eligibility uses verified structured requirements and deterministic comparison r
 - contextual caveats;
 - a direct-check action.
 
+The current deterministic vocabulary is deliberately narrow: versioned A-level and GCSE grade minimums, explicit all-of/any-of groups, and explicit multi-grade combinations using distinct recorded qualifications. Other qualification systems, tariff calculations, equivalencies, malformed rules, and unknown grade vocabularies are `needs-checking` until a source-backed deterministic rule is added. A similar-looking qualification, subject, or grade must not be inferred to be equivalent.
+
+Students record qualification type, subject, grade, and achieved/predicted/unknown status separately. They must also state whether the qualification record is complete for comparisons. When it is incomplete, a missing matching qualification or missing member of a required combination remains `unknown`; only an explicitly complete record can support an `unmet` conclusion from absence.
+
 Only a provider or employer makes the actual decision. Do not translate this state into acceptance likelihood.
 
 ### 2. Fit
@@ -123,11 +127,25 @@ Allowed roles:
 
 - `ambitious`
 - `currently-plausible`
-- `lower-risk-backup`
+- `qualification-aligned-alternative`
 - `exploratory`
 - `needs-checking`
 
 Portfolio role combines the separate views without claiming certainty. It must consider diversification across requirements, locations, deadlines, route types, and application effort.
+
+`qualification-aligned-alternative` means only that published minimum qualifications appear aligned and the currently assessed preference fit is mixed. It does not indicate likelihood, competitiveness, selection conditions, vacancy volume, or a provider-specific outcome.
+
+### Portfolio-role review matrix
+
+Use these fixed cases for automated regression checks and human review. A human reviewer must confirm that the displayed role and explanation remain cautious before a material role-policy change is released; automated tests do not replace that review.
+
+| Case | Eligibility | Fit | Information confidence | Expected role | Why |
+| --- | --- | --- | --- | --- | --- |
+| Published minimum currently unmet | `appears-unmet` | any assessed state | `high` | `ambitious` | The published minimum currently appears unmet. |
+| Aligned qualifications and assessed preferences | `appears-met` or `may-be-met` | `currently-strong` | `high` | `currently-plausible` when the portfolio has at least three items | This is a comparison role, not an outcome prediction. |
+| Aligned qualifications, mixed assessed preferences | `appears-met` | `mixed` | `high` | `qualification-aligned-alternative` | It is qualification-aligned only; it does not claim an outcome. |
+| Predicted qualifications with mixed assessed preferences | `may-be-met` | `mixed` | `high` | `exploratory` | Predicted results and mixed fit need further comparison. |
+| Missing, conflicting, stale, or unsupported material facts | `unknown` or `needs-checking` | any | `low` or `needs-checking` | `needs-checking` | A firmer role would overstate the information. |
 
 Do not force at least one opportunity into a favourable role. If all options need checking or have material gaps, say so.
 
@@ -231,6 +249,7 @@ Feedback remains reversible and its effect must be explainable.
 - Stale source: reduce information confidence and create a verification action.
 - Conflicting sources: show the conflict; do not silently select the more favourable value.
 - Missing student fact: ask for it only if it materially improves the assessment.
+- Unsupported or malformed hard rule: eligibility is `needs-checking`; it must never be skipped or treated as met.
 - Closed vacancy: do not recommend applying; preserve it only where useful for history or preparation.
 - Demo record: never present its requirements or deadlines as verified.
 
@@ -265,7 +284,7 @@ Use:
 - "could improve your preparation by";
 - "worth checking directly";
 - "the available information is incomplete";
-- "this could play an ambitious or backup role".
+- "this could play an ambitious or qualification-aligned alternative role".
 
 Avoid:
 

@@ -61,8 +61,8 @@ The repository's source adapters and catalogue database are prototypes:
 
 - UCAS and Find an Apprenticeship data are currently parsed from HTML.
 - Discover Uni currently records public source pages rather than importing the open dataset.
-- requirement-level provenance and publication review are incomplete.
-- the AI roadmap endpoint uses structured output and a fallback, but the wider requirement authority model is not implemented.
+- requirement-level provenance and publication review remain incomplete outside the commercial reviewed-record path. The commercial evaluator now fails closed for malformed or unsupported hard rules, but its source-backed deterministic qualification vocabulary is intentionally narrow.
+- the AI roadmap endpoint uses structured output and a fallback, but the wider requirement authority model remains incomplete.
 
 These boundaries should be replaced incrementally. Existing prototype records must remain clearly labelled and must not be treated as commercially verified facts.
 
