@@ -30,7 +30,7 @@ Compatibility demo implementation:
 Release gates not satisfiable from source code alone:
 
 - create and configure separate London-region staging and production Supabase projects;
-- connect separate Vercel preview and production projects and production domain;
+- connect one Vercel project to Git, with Preview deployments isolated to staging and Production deployments isolated to production, then configure the production domain;
 - provide Stripe and official catalogue credentials;
 - populate and review the minimum launch catalogue without demo records;
 - complete specialist legal, privacy, safeguarding, accessibility, refund, complaint, and retention review;

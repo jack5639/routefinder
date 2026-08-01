@@ -12,6 +12,8 @@ const serverSchema = publicSchema.extend({
   STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
   STRIPE_EXPECTED_LIVEMODE: z.enum(["true", "false"]).optional(),
   ADMIN_EMAILS: z.string().optional(),
+  DELETION_LEDGER_URL: z.string().url().optional(),
+  DELETION_LEDGER_BEARER_TOKEN: z.string().min(1).optional(),
 });
 
 export type PublicEnv = z.infer<typeof publicSchema>;
@@ -37,6 +39,8 @@ export function getServerEnv(): ServerEnv {
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
     STRIPE_EXPECTED_LIVEMODE: process.env.STRIPE_EXPECTED_LIVEMODE,
     ADMIN_EMAILS: process.env.ADMIN_EMAILS,
+    DELETION_LEDGER_URL: process.env.DELETION_LEDGER_URL,
+    DELETION_LEDGER_BEARER_TOKEN: process.env.DELETION_LEDGER_BEARER_TOKEN,
   });
 }
 

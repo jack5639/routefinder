@@ -6,9 +6,10 @@ This document is the durable operating baseline for the customer-ready MVP plann
 
 ## Environments and release
 
-- Vercel preview uses the staging Supabase project; the production Vercel project uses only the production Supabase project.
+- One Vercel project uses the staging Supabase project only in Preview deployments and the production Supabase project only in Production deployments.
 - Both Supabase projects must be created in London. Vercel functions use `lhr1`.
 - Preview and production credentials must never be copied into `.env.local`, source control, logs, screenshots, or support tickets.
+- The canonical production origin is `https://myroutefinder.co.uk`; configure `www.myroutefinder.co.uk` to redirect to that origin and verify HTTPS for both hostnames.
 - Production is opened only from a commit that passed test, lint, strict type-check, production build, documentation, browser, accessibility, security, privacy, payment, restore, and catalogue gates. Apply every Supabase migration, including direct-database-access hardening migrations, to staging before production and record the RLS/direct-RPC verification result.
 - Local SQLite is restricted to the labelled prototype and catalogue development. Commercial routes read Postgres.
 
@@ -114,7 +115,7 @@ No analytics, email, support, AI, or catalogue vendor is added without updating 
 - Account deletion removes the authentication user and cascades student-owned records.
 - Minimal payment, tax, fraud, dispute, complaint, breach, and legal records may be retained only for an approved period and anonymised where practical.
 - Backup rotation must be documented in Supabase settings. Deleted records are not restored for ordinary product use.
-- When a disaster restore reintroduces data deleted after the backup point, the deletion ledger and audit record must be replayed before service resumes.
+- When a disaster restore reintroduces data deleted after the backup point, the separately durable deletion ledger and audit record must be replayed before service resumes. The restored database is never the ledger authority.
 - Retention processing runs on a documented schedule and produces counts, not student content, in operational logs.
 
 ## Backup and restore
@@ -125,9 +126,9 @@ Enable scheduled staging and production backups in Supabase. At least quarterly,
 pnpm db:restore-test
 ```
 
-Use distinct project references and database URLs, the exact acknowledgement, and a matching disposable `restore-test` sentinel in the target before restoration. Verify migrations, schema security, authentication references, a synthetic profile/qualification/portfolio/evidence/task/application export-and-delete cycle, retained-record anonymisation, cleanup, and deletion replay. Record date, operator, backup identifier, result, follow-up actions, and when the restore project was destroyed. Never restore over staging or production.
+Use distinct project references and database URLs, the exact acknowledgement, a configured separately durable deletion ledger, and a matching disposable `restore-test` sentinel in the target before restoration. Verify migrations, schema security, authentication references, a synthetic profile/qualification/portfolio/evidence/task/application export-and-delete cycle, retained-record anonymisation, restoration of the pre-deletion backup, complete ledger replay, replay idempotency, cleanup, and deletion replay. Record date, operator, backup identifier, backup/deletion ordering, redacted project identifiers, migration versions, replay/anonymisation/idempotency/fail-closed results, follow-up actions, and when the restore project was destroyed. Never restore over staging or production.
 
-Deletion-ledger replay remains a launch blocker. A database backup cannot contain a deletion tombstone created after that backup point, so an in-database table would give false assurance. Before implementation, the founder and privacy/legal reviewer must approve the separately durable ledger store, minimum fields, lawful basis, retention period, access, encryption, and destruction procedure. `pnpm db:restore-test` verifies the other restore controls and exits non-zero at this explicit decision boundary.
+The source-code deletion-ledger boundary is implemented, but production use remains blocked. A database backup cannot contain a deletion tombstone created after that backup point, so an in-database table would give false assurance. The configured HTTPS ledger must be independently durable from Supabase backup and restoration boundaries; it receives only an opaque record ID, user UUID, deletion timestamp, and fixed reason. It must return a matching durable receipt on writes and a complete, time-bounded replay batch with coverage through the requested recovery point. Missing, malformed, partial, out-of-range, or unavailable data blocks deletion replay and service resumption. Before launch, the founder and privacy/legal reviewer must approve the exact ledger store, fields, lawful basis, access roles, encryption, retention, destruction, children’s-data impact, and processor/international-transfer terms, then record a genuine approval reference here. No approval has been recorded. `pnpm db:restore-test` now verifies the complete real isolated replay exercise only when its separately durable ledger environment is configured.
 
 ### Release command
 

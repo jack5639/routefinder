@@ -61,7 +61,7 @@ The commercial implementation now provides the source-code boundary for accounts
 | Scoring | `src/lib/scoring` | Pure deterministic scoring, board construction, feedback, and simulator comparison |
 | Catalogue | `src/lib/catalog` | Source adapters, import, SQLite schema, queries, status, and freshness |
 | Commercial MVP domain | `src/lib/mvp` | Validated schemas, entitlements, payment ordering, task selection, and commercial types |
-| Commercial persistence | `supabase` and authenticated API routes | Postgres migrations, RLS, auth, user data, catalogue publication, payment projection, export, and deletion |
+| Commercial persistence | `supabase`, authenticated API routes, and the deletion-ledger boundary | Postgres migrations, RLS, auth, user data, catalogue publication, payment projection, export, deletion, and restore replay |
 | Commercial official sources | `src/lib/catalog/commercial` | Display Advert API v2 and Discover Uni dataset boundaries |
 | Browser persistence | `src/lib/*-storage.ts` | Normalised local save/load/clear operations and events |
 | Client hooks | `src/lib/use-*` | React access to browser or catalogue state |
@@ -216,6 +216,7 @@ Browser storage remains acceptable for low-risk prototype state. The local SQLit
 - Treat provider selection as an implementation decision; do not leak provider SDKs through the UI.
 - Use migrations and backups.
 - Define retention and deletion by data category.
+- Write account-deletion replay records through the separately durable, provider-neutral boundary in `src/lib/deletion-ledger.ts`; never treat the restored database as its own deletion ledger. See `adr/003-separately-durable-deletion-ledger.md`.
 - Keep local UI preferences separate from recoverable product data.
 - Do not migrate browser data into an account without an explicit user action and validation.
 
@@ -332,6 +333,7 @@ Current variables are listed in `.env.example`. The commercial groups are:
 | `COMMERCIAL_E2E_*` | Authenticated staging browser test only | Isolated project identity, anonymous key, server-only setup key, and exact acknowledgement |
 | `SUPABASE_SECURITY_STAGING_*` | Destructive security test only | Explicit isolated project identity, database connection, sentinel, keys, and exact acknowledgement |
 | `SUPABASE_RESTORE_TEST_*` | Destructive restore test only | Separate disposable restore target identity, API and database access |
+| `DELETION_LEDGER_*` | Account deletion and destructive restore test | Server-only HTTPS endpoint and credential for a separately durable deletion ledger |
 | `RELEASE_VERIFY_*` | Strict release operator only | Exact acknowledgement and explicit selection of every external launch suite |
 
 ### Payment projection and retries
@@ -395,7 +397,7 @@ pnpm release:verify
 
 ## Remaining production sequence
 
-1. Create and connect separate Vercel preview/production and London Supabase staging/production projects.
+1. Create and connect one Vercel project with Preview and Production environments, plus separate London Supabase staging and production projects.
 2. Apply migrations, configure secrets, and run staging auth, RLS, payment, restore, and cross-user tests.
 3. Import, manually verify, and spot-check the minimum source-backed launch catalogue.
 4. Complete specialist policy, DPIA, safeguarding, retention, accessibility, and threat-model review.

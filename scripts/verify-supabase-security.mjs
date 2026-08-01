@@ -22,7 +22,7 @@ const sentinelMarker = "routefinder-disposable-security-test-v1";
 const expectedMigrations = [
   "202607290001", "202607290002", "202607290003", "202607290004",
   "202607300001", "202607300002", "202607300003", "202607300004",
-  "202607300005",
+  "202607300005", "20260731172503",
 ];
 const required = ["url", "anonKey", "serviceKey", "dbUrl", "projectRef"];
 if (required.some((key) => !env[key]) || env.acknowledgement !== exactAcknowledgement) {

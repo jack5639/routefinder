@@ -11,6 +11,7 @@ This directory contains the durable sources of truth for Routefinder. Read `AGEN
 | [`scoring-model.md`](scoring-model.md) | Recommendation semantics | Changing eligibility, fit, readiness, confidence, portfolio roles, ranking, feedback, simulator logic, or recommendation copy |
 | [`adr/001-local-storage-boundary.md`](adr/001-local-storage-boundary.md) | Prototype persistence decision | Changing local storage, accounts, sharing, recovery, export, deletion, or migration |
 | [`adr/002-verified-data-and-bounded-ai.md`](adr/002-verified-data-and-bounded-ai.md) | Source and AI authority decision | Changing catalogue sources, requirements, provenance, automation, AI outputs, agents, or eligibility |
+| [`adr/003-separately-durable-deletion-ledger.md`](adr/003-separately-durable-deletion-ledger.md) | Recovery deletion-replay boundary | Changing commercial account deletion, backups, restoration, or retention |
 | [`operations.md`](operations.md) | Production operations, data map, DPIA baseline, retention, subprocessors, restore, and incident procedures | Changing deployment operations, privacy operations, support, security response, backups, deletion, or launch evidence |
 
 Repository-level guidance:

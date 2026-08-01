@@ -36,10 +36,15 @@ async function send(event: Record<string, unknown>) {
 }
 
 afterEach(async () => {
-  await Promise.all(createdUsers.splice(0).map((id) => admin!.auth.admin.deleteUser(id)));
+  if (admin) await Promise.all(createdUsers.splice(0).map((id) => admin.auth.admin.deleteUser(id)));
 });
 
-describe.skipIf(!enabled)("Stripe test-mode staging fulfilment", () => {
+describe("Stripe test-mode staging fulfilment", () => {
+  it("requires an explicit isolated staging configuration", () => {
+    expect(enabled, "Set every PAYMENT_STAGING_* value before running this release gate.").toBe(true);
+  });
+
+  describe.skipIf(!enabled)("configured staging checks", () => {
   it("applies a paid event exactly once when delivered concurrently", async () => {
     const { userId, cycle, reservation } = await fixture();
     const event = {
@@ -67,5 +72,6 @@ describe.skipIf(!enabled)("Stripe test-mode staging fulfilment", () => {
     }
     const { data } = await admin!.from("entitlements").select("*").eq("user_id", userId);
     expect(data).toHaveLength(0);
+  });
   });
 });

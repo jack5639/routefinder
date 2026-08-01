@@ -20,7 +20,9 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-  await isolated.cleanup();
+  // Configuration is validated in beforeAll. Avoid hiding that intentional
+  // fail-closed error with a secondary cleanup error when setup never ran.
+  if (isolated) await isolated.cleanup();
 });
 
 test("protected workspace redirects an unauthenticated student", async ({ page }) => {
