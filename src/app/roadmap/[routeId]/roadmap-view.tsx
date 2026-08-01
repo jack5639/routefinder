@@ -684,10 +684,6 @@ export function RoadmapView({ route, roadmap }: { route: RouteOption; roadmap: R
         <RouteDataPanel route={route} />
       </section>
 
-      <section className="mx-auto mt-6 max-w-4xl">
-        <RouteDataPanel route={route} />
-      </section>
-
       <section className="mx-auto mt-6 grid max-w-4xl gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <ProfileChip label="Route type" value={route.type} />
         <ProfileChip

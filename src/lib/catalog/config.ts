@@ -19,7 +19,7 @@ export const sourceStaleAfterMinutes: Record<CatalogSource, number> = {
 };
 
 export function getCatalogDbPath() {
-  return resolve(process.cwd(), process.env.CATALOG_DB_PATH ?? DEFAULT_CATALOG_DB_PATH);
+  return resolve(/* turbopackIgnore: true */ process.cwd(), process.env.CATALOG_DB_PATH ?? DEFAULT_CATALOG_DB_PATH);
 }
 
 export function getApprenticeshipSyncMinutes() {

@@ -1,8 +1,8 @@
 # Routefinder Final Product and Commercial Plan
 
-Last updated: 29 July 2026
+Last updated: 30 July 2026
 
-Status: final strategic direction for validation and the first commercial version. Change the launch direction only when user evidence or commercial results contradict an assumption below.
+Status: final strategic direction for the customer-ready MVP launching on 15 October 2026. Change the launch direction only when user evidence or commercial results contradict an assumption below.
 
 Related documentation: [`README.md`](README.md), [`architecture.md`](architecture.md), [`scoring-model.md`](scoring-model.md), and the [`adr`](adr) directory.
 
@@ -55,7 +55,7 @@ The higher-value problem is that a student often cannot answer:
 - What experience or evidence could be used for each requirement?
 - Where are the material gaps?
 - What should be done this week, before the next deadline?
-- Is the overall application portfolio balanced across ambitious, plausible, lower-risk, and exploratory options?
+- Is the overall application portfolio balanced across ambitious, currently plausible, qualification-aligned alternative, and exploratory options?
 - How can university and apprenticeship applications be managed together without missing different deadlines and assessment stages?
 
 Routefinder must make these answers visible, explainable, current, and actionable.
@@ -185,7 +185,7 @@ Do not combine these into one total score:
 2. **Fit**: alignment with stated interests, preferences, and constraints.
 3. **Application readiness**: strength and coverage of the student's current evidence and preparation.
 4. **Information confidence**: source quality, freshness, completeness, and unresolved conflicts.
-5. **Portfolio role**: ambitious, currently plausible, lower-risk backup, exploratory, or needs checking.
+5. **Portfolio role**: ambitious, currently plausible, qualification-aligned alternative, exploratory, or needs checking. A qualification-aligned alternative does not claim an outcome.
 
 Eligibility must always state that providers and employers make decisions and that contextual or unrecorded factors may apply.
 
@@ -277,7 +277,6 @@ Purpose: deliver a complete first success and generate qualified demand.
 - basic gap map and tracker;
 - one refreshed weekly plan each month;
 - deadline notices;
-- three AI feedback or practice requests each month;
 - source links and freshness warnings;
 - exportable basic summary.
 
@@ -285,7 +284,7 @@ Free users must be able to make a real decision and complete a real action. The 
 
 ### Routefinder Cycle
 
-- Founding beta: GBP29 for the first 50 paying users.
+- Founding launch: GBP29 for the first 50 paying users.
 - Standard launch price: GBP59 for the relevant application cycle.
 - Access ends on 30 September following the intended entry year, with clear notice at purchase.
 
@@ -297,11 +296,9 @@ Includes:
 - continuous weekly planning and deadline reminders;
 - full application tracker;
 - portfolio balance and backup prompts;
-- parent/adviser sharing controlled by the student;
-- AI feedback, interview practice, and assessment preparation within a clearly stated fair-use allowance;
 - data export and priority support.
 
-Do not advertise unlimited AI. Product usage may be broad, but compute-heavy features need transparent fair-use limits and abuse protection.
+AI feedback and student-controlled parent/adviser sharing are post-MVP capabilities. Do not advertise them as part of the launch offer until their safety, privacy, and fair-use boundaries are implemented and tested.
 
 ### Routefinder Coach
 
@@ -442,17 +439,18 @@ Before taking payments:
 - a Data Protection Impact Assessment is completed;
 - data licences and attribution requirements are recorded.
 
-### Gate 1: problem and payment
+### Gate 1: customer-ready MVP
 
-By 31 August 2026:
+Before opening payments on 15 October 2026:
 
-- interview 15 students, 10 parents/carers, and 5 careers advisers;
-- observe at least 10 students attempting the workflow rather than asking only hypothetical questions;
-- pre-sell 25 founding Cycle places at GBP29;
-- at least 10 buyers must be outside friends, family, and close personal contacts;
-- manually deliver or founder-review every founding plan.
+- the production activation flow works from account creation through a completed weekly action;
+- authentication, object-level authorisation, export, deletion, backups, and payments pass;
+- every published opportunity is reviewed and source-backed;
+- no demo record or total score appears in the commercial workflow;
+- privacy, safeguarding, accessibility, refund, complaints, and support baselines have specialist review;
+- mobile, keyboard, and WCAG 2.2 AA checks pass.
 
-If fewer than 10 independent customers pay, do not build more AI or expand the catalogue. Rework the paid promise and repeat the test.
+Do not take customer payment before this gate passes.
 
 ### Gate 2: product usefulness
 
@@ -549,6 +547,8 @@ Every material fact must include:
 6. require human review for new, ambiguous, conflicting, or high-impact requirements.
 7. publish with provenance.
 8. monitor closure and freshness.
+
+The implemented commercial workflow performs source observation in bounded database batches, keeps one superseding pending revision chain per opportunity, and preserves published reviewed values until a human accepts a source change. Publication and requirement review are service-owned database transactions with reviewer identity, mandatory notes, and retained prior facts. Source automation cannot call a browser-accessible publication operation.
 
 Start with a deliberately narrow, real, verified catalogue for the four launch sectors. Do not expand mock records as a substitute for source-backed integration.
 
@@ -652,9 +652,9 @@ Build in this order:
 9. Add the unified application tracker and reminders.
 10. Add analytics and source-issue reporting.
 11. Add payments, entitlements, fair-use enforcement, and refunds.
-12. Add constrained AI feedback and practice.
-13. Add student-controlled parent/adviser sharing.
-14. Build only the minimum aggregate view needed for paid school pilots.
+12. Complete release hardening and open the founding launch.
+
+After the MVP is operating safely, add constrained AI feedback, student-controlled sharing, and any institutional view as separately validated capabilities.
 
 The current deterministic scoring, storage separation, catalogue boundary, route pages, roadmap work, and test personas are useful foundations. They should be adapted rather than discarded where they support this workflow.
 
@@ -669,6 +669,8 @@ Do not build before the validation gates support it:
 - paid employer lead generation;
 - an acceptance predictor;
 - a general-purpose AI chat screen;
+- AI feedback or practice before the post-MVP safety and fair-use boundary passes;
+- parent/adviser sharing before the post-MVP consent and access-control boundary passes;
 - large-scale generated content;
 - a broad school careers curriculum;
 - deep MIS integrations;
@@ -697,36 +699,37 @@ Agents and automation may research, extract, classify, draft, test, and monitor.
 
 ## Execution calendar
 
-### 29 July to 9 August 2026
+### 29 July to 16 August 2026
 
-- stabilise the repository and run the full quality suite;
-- create the paid-proposition landing page;
-- prepare interview scripts and a clickable workflow;
+- stabilise the repository and release pipeline;
+- establish Vercel, Supabase, authentication, secure persistence, consent, export, and deletion;
 - confirm initial data licences and source access;
-- draft privacy, safety, AI, refund, and safeguarding baselines.
+- draft privacy, safety, refund, safeguarding, complaints, and accessibility baselines.
 
-### 10 to 31 August 2026
+### 17 August to 13 September 2026
 
-- complete 30 stakeholder interviews;
-- observe at least 10 student workflows;
-- pre-sell 25 founding places;
-- deliver concierge readiness plans;
-- choose the narrow verified launch catalogue from actual user demand;
-- measure which result causes payment.
+- replace the quiz with the readiness check;
+- build the reviewed catalogue and opportunity shortlist;
+- implement the five separate decision views;
+- preserve the prototype under a clearly labelled demo boundary.
 
-### 1 September to 15 October 2026
+### 14 September to 14 October 2026
 
-- launch the paid beta;
-- focus early-deadline applicants and opening apprenticeship campaigns;
-- ship evidence mapping, weekly actions, tracking, reminders, and payments;
+- ship evidence mapping, gap analysis, weekly actions, tracking, entitlements, and payments;
 - publish the first high-intent content cluster;
-- review every source issue and early paid-user outcome.
+- complete the DPIA, specialist policy review, accessibility review, threat model, restore test, and production smoke tests.
+
+### 15 October 2026
+
+- open the customer-ready MVP and founding-launch price;
+- monitor activation, source issues, payments, refunds, support, and completed weekly actions;
+- operate it as the complete, supported MVP described in this document.
 
 ### 16 October 2026 to 13 January 2027
 
 - target the main university application window;
 - expand only within the four launch sectors;
-- add structured interview and assessment preparation;
+- add AI feedback, sharing, or structured practice only after their post-MVP gates pass;
 - develop the referral and parent webinar loops;
 - begin conversations for three paid school pilots.
 

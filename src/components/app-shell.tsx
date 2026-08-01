@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { StartAgainButton } from "@/components/start-again-button";
 
 const navItems = [
-  { href: "/", label: "Home" },
+  { href: "/demo", label: "Demo home" },
   { href: "/quiz", label: "Quiz" },
   { href: "/results", label: "Results" },
   { href: "/roadmap", label: "Roadmap" },
@@ -17,8 +17,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 py-4 sm:px-6 lg:px-8">
       <header className="sticky top-0 z-10 -mx-4 border-b border-ink/10 bg-oat/90 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
         <nav className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <Link href="/" className="text-sm font-black tracking-wide text-ink">
-            Routefinder
+          <Link href="/demo" className="text-sm font-black tracking-wide text-ink">
+            Routefinder · prototype demo
           </Link>
           <div className="flex w-full gap-1 overflow-x-auto rounded-full border border-ink/10 bg-white/70 p-1 text-xs font-semibold shadow-sm sm:w-auto">
             {navItems.map((item) => (
@@ -34,6 +34,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </nav>
       </header>
+      <p className="mt-3 rounded-xl bg-coral/10 px-4 py-3 text-sm font-black">
+        Prototype demo: sample data and legacy scores below are not part of the customer product.{" "}
+        <Link href="/" className="text-leaf underline">Go to the commercial MVP</Link>.
+      </p>
       <div className="flex-1 py-6 sm:py-10">{children}</div>
     </main>
   );

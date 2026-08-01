@@ -55,16 +55,17 @@ These costs are accepted because trust and accuracy are core commercial requirem
 - Do not send unnecessary student identifiers or sensitive content to a model.
 - Do not allow sponsorship, payment, or partnership state into recommendation ordering.
 
-## Current implementation gap
+## Current implementation
 
-The repository's source adapters and catalogue database are prototypes:
+The compatibility catalogue still contains prototype HTML adapters and remains clearly labelled. The commercial path is separate:
 
-- UCAS and Find an Apprenticeship data are currently parsed from HTML.
-- Discover Uni currently records public source pages rather than importing the open dataset.
-- requirement-level provenance and publication review are incomplete.
-- the AI roadmap endpoint uses structured output and a fallback, but the wider requirement authority model is not implemented.
+- Find an Apprenticeship uses the official Display Vacancy Advert API boundary and complete-snapshot discipline.
+- Discover Uni verifies and parses the approved HESA archive, preserves required attribution, and imports only draft candidates.
+- append-only observations, hashes, restricted raw evidence, deduplicated pending revisions, and audit-preserving human decisions keep reviewed facts authoritative;
+- service-role-only database transactions enforce opportunity, requirement, revision, and publication rules;
+- unsupported deterministic qualification rules fail closed. The supported vocabulary remains deliberately narrow.
 
-These boundaries should be replaced incrementally. Existing prototype records must remain clearly labelled and must not be treated as commercially verified facts.
+External source permission references, real credentials, provider-page requirement review, the real 80-record catalogue, and isolated Supabase verification remain founder-owned launch gates. The legacy AI roadmap endpoint continues to use structured output and a fallback; generative AI is not part of the commercial MVP.
 
 ## Alternatives rejected
 
