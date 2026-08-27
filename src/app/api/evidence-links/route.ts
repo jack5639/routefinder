@@ -5,7 +5,7 @@ import { evidenceLinkSchema } from "@/lib/mvp/schemas";
 import { createHash } from "node:crypto";
 
 export async function POST(request: Request) {
-  const context = await getMutationApiContext();
+  const context = await getMutationApiContext(request);
   if (!context) return apiError("Sign in to map evidence.", 401, "unauthorised");
 
   const parsed = evidenceLinkSchema.safeParse(await parseJson(request));
@@ -21,11 +21,14 @@ export async function POST(request: Request) {
   if (!owned.data) return apiError("That evidence item is unavailable.", 404, "not-found");
   const { data: requirement } = await context.supabase
     .from("requirements")
-    .select("id,opportunity_id")
+    .select("id,opportunity_id,hard_requirement,kind")
     .eq("id", parsed.data.requirementId)
     .eq("publication_state", "published")
     .maybeSingle();
   if (!requirement) return apiError("That reviewed requirement is unavailable.", 404, "not-found");
+  if (requirement.hard_requirement && requirement.kind === "grade") {
+    return apiError("Hard grade requirements are assessed from your qualifications, not evidence examples.", 409, "deterministic-requirement");
+  }
   const { data: savedOpportunity } = await context.supabase
     .from("portfolio_items")
     .select("id")

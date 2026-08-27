@@ -10,6 +10,9 @@ const reassertionMigration = readFileSync("supabase/migrations/202607290004_reas
 const readinessMigration = readFileSync("supabase/migrations/202607300001_transactional_readiness_profile.sql", "utf8");
 const releaseMigration = readFileSync("supabase/migrations/202607300004_release_verification_and_atomic_mutations.sql", "utf8");
 const catalogueOperationsMigration = readFileSync("supabase/migrations/202607300005_catalogue_publication_operations.sql", "utf8");
+const cataloguePublicSafetyMigration = readFileSync("supabase/migrations/20260812130000_catalogue_public_safety.sql", "utf8");
+const paymentRepairMigration = readFileSync("supabase/migrations/20260812120000_repair_stripe_entitlement_projection.sql", "utf8");
+const launchSafetyMigration = readFileSync("supabase/migrations/20260827202316_launch_readiness_and_2027_safety.sql", "utf8");
 const apiContext = readFileSync("src/lib/api-context.ts", "utf8");
 const publicCatalogue = readFileSync("src/lib/supabase/public-catalogue.ts", "utf8");
 
@@ -71,7 +74,8 @@ describe("database security boundary", () => {
       "grant execute on function public.consume_rate_limit(text, integer, integer) to authenticated",
     );
     expect(migration).toContain("invalid_rate_limit_parameters");
-    expect(migration).toContain("pg_catalog.least(public.rate_limit_buckets.count + 1, maximum + 1)");
+    expect(migration).not.toContain("pg_catalog.least(");
+    expect(migration).toContain("when public.rate_limit_buckets.count + 1 > maximum + 1 then maximum + 1");
     expect(apiContext).toContain('context.admin.rpc("consume_rate_limit"');
   });
 
@@ -126,6 +130,24 @@ describe("database security boundary", () => {
     expect(reassertionMigration).toContain("create trigger source_issue_security");
   });
 
+  it("keeps Stripe entitlement projection aligned with the TypeScript ordering policy", () => {
+    expect(paymentRepairMigration).toContain("last_payment_event_type = 'checkout.session.completed'");
+    expect(paymentRepairMigration).toContain("'payment_review'");
+    expect(paymentRepairMigration).toContain("next_entitlement_status := 'disputed'");
+    expect(paymentRepairMigration).not.toContain("p_event_id > coalesce");
+    expect(paymentRepairMigration).not.toMatch(/p_dispute_status\s*=\s*'won'[\s\S]*?status\s*:=\s*'active'/);
+    expect(paymentRepairMigration).toContain("last_payment_event_type = p_event_type");
+  });
+
+  it("enforces the launch cycle, snapshot continuity, and deterministic grade boundary below the API", () => {
+    expect(launchSafetyMigration).toContain("application_cycle is null or application_cycle = 2027");
+    expect(launchSafetyMigration).toContain("p_application_cycle <> 2027");
+    expect(launchSafetyMigration).toContain("opportunity_snapshot jsonb");
+    expect(launchSafetyMigration).toContain("relationship_invalid:deterministic_grade_evidence_forbidden");
+    expect(launchSafetyMigration).toContain("grant execute on function public.routefinder_release_probe() to service_role");
+    expect(launchSafetyMigration).not.toMatch(/grant execute on function public\.routefinder_release_probe\(\) to (?:anon|authenticated)/);
+  });
+
   it("requires published parent records for public catalogue reads", () => {
     expect(migration).toContain('create policy "published requirements of published opportunities are public"');
     expect(migration).toMatch(
@@ -135,6 +157,18 @@ describe("database security boundary", () => {
     expect(migration).toMatch(
       /opportunities\.organisation_id = organisations\.id[\s\S]*opportunities\.publication_state = 'published'/,
     );
+  });
+
+  it("keeps public catalogue reads behind the current safety predicate", () => {
+    expect(cataloguePublicSafetyMigration).toContain("create or replace function public.catalogue_public_opportunity_current");
+    expect(cataloguePublicSafetyMigration).toContain("o.state = 'open'");
+    expect(cataloguePublicSafetyMigration).toContain("o.deadline > pg_catalog.now()");
+    expect(cataloguePublicSafetyMigration).toContain("o.application_cycle = 2027");
+    expect(cataloguePublicSafetyMigration).toContain("s.complete_snapshot");
+    expect(cataloguePublicSafetyMigration).toContain("q.hard_requirement and not public.catalogue_rule_supported");
+    expect(cataloguePublicSafetyMigration).toContain('create policy "current published opportunities are public"');
+    expect(cataloguePublicSafetyMigration).toMatch(/revoke all on function public\.verify_catalogue_opportunity_cycle\([\s\S]*?\) from public, anon, authenticated/);
+    expect(cataloguePublicSafetyMigration).toMatch(/grant execute on function public\.verify_catalogue_opportunity_cycle\([\s\S]*?\) to service_role/);
   });
 
   it("does not grant public access to raw catalogue snapshots", () => {
@@ -175,6 +209,52 @@ describe("database security boundary", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("covers every state-changing route with same-origin or caller authentication", () => {
+    const guardedBrowserRoutes = [
+      "src/app/api/account/delete/route.ts",
+      "src/app/api/account/import-prototype/route.ts",
+      "src/app/api/account/export/route.ts",
+      "src/app/api/analytics/route.ts",
+      "src/app/api/funnel/route.ts",
+      "src/app/api/applications/route.ts",
+      "src/app/api/applications/[id]/route.ts",
+      "src/app/api/checkout/route.ts",
+      "src/app/api/evidence/route.ts",
+      "src/app/api/evidence/[id]/route.ts",
+      "src/app/api/evidence-links/route.ts",
+      "src/app/api/evidence-links/[id]/route.ts",
+      "src/app/api/portfolio/route.ts",
+      "src/app/api/portfolio/[id]/route.ts",
+      "src/app/api/profile/route.ts",
+      "src/app/api/source-issues/route.ts",
+      "src/app/api/tasks/route.ts",
+      "src/app/api/tasks/[id]/route.ts",
+      "src/app/api/tasks/refresh/route.ts",
+      "src/app/api/auth/magic-link/route.ts",
+      "src/app/api/recommendations/route.ts",
+      "src/app/api/roadmaps/generate/route.ts",
+      "src/app/auth/signout/route.ts",
+      "src/app/api/admin/catalogue/route.ts",
+      "src/app/api/admin/catalogue/facts/route.ts",
+      "src/app/api/admin/catalogue/review/route.ts",
+      "src/app/api/admin/catalogue/sources/route.ts",
+      "src/app/api/admin/catalogue/sync/route.ts",
+    ];
+    for (const path of guardedBrowserRoutes) {
+      expect(readFileSync(path, "utf8"), path).toMatch(/getMutationApiContext\(request\)|isSameOriginRequest\(request\)/);
+    }
+
+    expect(readFileSync("src/app/api/stripe/webhook/route.ts", "utf8")).toContain('request.headers.get("stripe-signature")');
+    for (const path of ["src/app/api/cron/catalogue/route.ts", "src/app/api/cron/expiry/route.ts"]) {
+      expect(readFileSync(path, "utf8"), path).toContain('request.headers.get("authorization")');
+    }
+
+    const authCallback = readFileSync("src/app/auth/callback/route.ts", "utf8");
+    expect(authCallback).toContain("exchangeCodeForSession(code)");
+    expect(authCallback).toContain("emailOtpTypes.has(type)");
+    expect(authCallback).toContain("normalisePostLoginPath");
+  });
+
   it("accepts only the browser analytics event the current client emits", () => {
     expect(analyticsSchema.safeParse({ eventName: "readiness_started", properties: {} }).success).toBe(true);
     expect(analyticsSchema.safeParse({ eventName: "checkout_completed", properties: {} }).success).toBe(false);
@@ -189,5 +269,16 @@ describe("database security boundary", () => {
   it("does not accept client-selected consent policy versions", () => {
     expect(profileSchema.shape.policyVersion.safeParse(privacyTermsVersion).success).toBe(true);
     expect(profileSchema.shape.policyVersion.safeParse("forged-version").success).toBe(false);
+  });
+
+  it("accepts only the supported 2027 launch cycle in profile input", () => {
+    const base = {
+      currentStage: "Year 13", applicationCycle: 2027, homeRegion: "London", maxTravelMinutes: 60,
+      relocationPreference: "unsure", routeIntent: "combined", sectors: ["technology"], workStyles: [],
+      financialPreference: "open", constraints: [], qualifications: [], qualificationsComplete: false,
+      policyVersion: privacyTermsVersion,
+    };
+    expect(profileSchema.safeParse(base).success).toBe(true);
+    expect(profileSchema.safeParse({ ...base, applicationCycle: 2028 }).success).toBe(false);
   });
 });

@@ -36,7 +36,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const context = await getMutationApiContext();
+  const context = await getMutationApiContext(request);
   if (!context) return apiError("Sign in to schedule an action.", 401, "unauthorised");
   if (!(await consumeRateLimit(context, "task-write", 30, 3600))) {
     return apiError("Too many action changes. Try again shortly.", 429, "rate-limited");

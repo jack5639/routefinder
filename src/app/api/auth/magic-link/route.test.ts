@@ -40,4 +40,19 @@ describe("POST /api/auth/magic-link", () => {
       }),
     }));
   });
+
+  it("carries only a validated campaign code into the callback", async () => {
+    const response = await POST(new Request("https://routefinder.test/api/auth/magic-link", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", origin: "https://routefinder.test" },
+      body: JSON.stringify({ email: "student@example.com", nextPath: "/readiness", campaign: "school-visit" }),
+    }));
+
+    expect(response.status).toBe(200);
+    expect(signInWithOtp).toHaveBeenCalledWith(expect.objectContaining({
+      options: expect.objectContaining({
+        emailRedirectTo: "https://routefinder.test/auth/callback?next=%2Freadiness&campaign=school-visit",
+      }),
+    }));
+  });
 });

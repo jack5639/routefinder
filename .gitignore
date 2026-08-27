@@ -1,4 +1,6 @@
 node_modules
+.DS_Store
+**/.DS_Store
 .pnpm-store
 .next
 *.tsbuildinfo
@@ -15,3 +17,7 @@ playwright-report
 data/catalog/*.sqlite
 data/catalog/*.sqlite-*
 data/catalog/snapshots
+.vercel
+.env*
+/pnpm-lock\ *.yaml
+/supabase/.temp/

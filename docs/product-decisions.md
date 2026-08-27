@@ -1,18 +1,22 @@
 # Routefinder Final Product and Commercial Plan
 
-Last updated: 30 July 2026
+Last updated: 27 August 2026
 
-Status: final strategic direction for the customer-ready MVP launching on 15 October 2026. Change the launch direction only when user evidence or commercial results contradict an assumption below.
+Status: final strategic direction for a gated founding launch targeted from 15 September 2026, with 15 October 2026 as the latest planned paid opening for the main January-deadline cohort. Safety and production gates, not the calendar, authorise payment. Change the launch direction only when user evidence or commercial results contradict an assumption below.
 
 Related documentation: [`README.md`](README.md), [`architecture.md`](architecture.md), [`scoring-model.md`](scoring-model.md), and the [`adr`](adr) directory.
 
 ## Executive decision
 
-Routefinder will be the application-readiness workspace for late Year 12 and early Year 13 students in England applying to university, higher apprenticeships, degree apprenticeships, or a combination of these.
+Routefinder will be the application-readiness and decision workspace for late Year 12 and early Year 13 students in England exploring, comparing, or applying to university, higher apprenticeships, degree apprenticeships, or a combination of these.
 
 The first version will focus on technology, engineering, business, and finance. It will include university opportunities in England, Wales, and Scotland and apprenticeship vacancies in England.
 
-Routefinder will not compete primarily as a careers quiz, generic course finder, admissions predictor, application-writing service, or school-wide careers curriculum. Discovery is already crowded and often free. Routefinder's paid value is helping a student turn real opportunity requirements into an evidence-backed, deadline-aware plan and then complete that plan.
+Routefinder will not compete primarily as a careers quiz, generic course finder, admissions predictor, application-writing service, or school-wide careers curriculum. Discovery is already crowded and often free. Routefinder helps a student turn scattered research into an explainable route comparison, then turn real opportunity requirements into an evidence-backed, deadline-aware plan and complete that plan.
+
+Students may arrive with no route in mind, a few options to compare, or a specific course or vacancy already chosen. These are three valid starting points in one product; no student is required to begin with a declared destination.
+
+The initial acquisition wedge is narrower than the product boundary: students in the four launch sectors who want to pursue higher or degree apprenticeships while keeping credible university backups active. It is a marketing focus, not an eligibility rule or a promise that apprenticeships are the right route for every student.
 
 The concise promise is:
 
@@ -20,7 +24,7 @@ The concise promise is:
 
 The core transformation is:
 
-> uncertain student with scattered information -> balanced opportunity portfolio -> verified requirements -> mapped evidence and gaps -> completed weekly actions -> stronger, student-owned applications
+> scattered research or uncertainty -> route options worth investigating -> balanced opportunity portfolio -> verified requirements -> mapped evidence and gaps -> completed weekly actions -> stronger, student-owned applications
 
 ## Strategic score
 
@@ -35,7 +39,7 @@ This final direction scores 82/100 as a plan, conditional on the validation gate
 | Differentiation | 80 | Requirements-to-evidence execution rather than discovery or generic advice |
 | User value | 84 | Produces specific actions and an organised application portfolio |
 | Willingness to pay | 64 | Parent-paid cycle access is plausible but must be pre-sold |
-| Distribution | 72 | Search, short-form education, referrals, parents, advisers, then schools |
+| Distribution | 82 | Existing niche TikTok reach is strong evidence of attention; qualified traffic and conversion remain unproven |
 | Data feasibility | 68 | Official apprenticeship data exists; university requirements remain operationally difficult |
 | Defensibility | 73 | The structured requirement/evidence graph can become a data and workflow advantage |
 | Unit economics | 82 | Software-led cycle pricing with bounded AI and optional high-margin support |
@@ -44,6 +48,28 @@ This final direction scores 82/100 as a plan, conditional on the validation gate
 
 This is not a prediction that the company will succeed. It is the strongest testable direction available from the current evidence. Payment, retention, accuracy, and acquisition must determine whether it deserves further investment.
 
+## Revenue optimisation decision
+
+Routefinder optimises for first-year contribution and evidence of repeatable demand, while preserving options for a larger three-year business. It does not optimise for the largest possible launch-week revenue number. Revenue remains constrained by student safety, source accuracy, accessibility, privacy, honest pricing, and the rule that commercial relationships never affect recommendations or ordering.
+
+The founder has demonstrated organic short-form distribution in the niche: approximately 500,000 views on relevant content. This is strong evidence of attention, not yet evidence of qualified traffic, activation, or willingness to pay. TikTok therefore becomes the primary year-one acquisition channel, with every video cohort measured through to useful action and contribution.
+
+The commercial audit identified the following weaknesses and decisions:
+
+| Weakness | Revenue risk | Decision |
+| --- | --- | --- |
+| The public launch was scheduled on the 15 October early UCAS deadline | Routefinder would miss the preparation window for early applicants and may attract students too late to help | Capture demand from August with a no-payment waitlist and a free observed beta. Target a capped founding launch from 15 September only if the complete paid gate passes; otherwise say clearly that the first paid cohort targets the January deadline and rolling apprenticeship applications. |
+| TikTok reach is not connected to an owned, measurable funnel | Views can disappear without producing users, learning, or revenue | Use one campaign landing page and one call to action per content series. Measure qualified click, readiness start, activation, paywall, checkout, payment, refund, and completed action by series. Capture only consented contact details needed for the waitlist. |
+| The student is the user, but a parent or carer may be the payer | A high-intent student can reach checkout without a practical or privacy-safe way to involve the payer | At launch, support a clearly explained parent-paid checkout while the student remains the account owner. Payment grants access only to the student's account and never grants parent access to readiness, evidence, shortlist, or application content. |
+| The Free tier contains much of the core workflow while paid value is described mainly as higher limits | Students may value the product without understanding why continuity is worth paying for | Preserve a genuine free result, then present Cycle after the first completed action and at a real continuity need: a second plan refresh, a sixth saved opportunity, or complete mapping across several applications. Eligibility, source facts, deadlines, and safety information are never paywalled. |
+| Catalogue readiness is measured mainly by an 80-record minimum | A numerically ready catalogue can still fail a student's subject, location, grade, or route constraints | Keep the 80-record safety minimum and require every promoted acquisition slice/persona to have at least three genuinely relevant, open, source-backed opportunities, or the campaign remains off. Market the catalogue as curated rather than comprehensive. |
+| The GBP29 founding offer and GBP59 standard offer have no explicit price-learning design | Discount conversion can be mistaken for standard-price demand, leaving money on the table or causing a weak price jump | Treat the first 50 places as a finite validation cohort, not proof of GBP59 willingness to pay. Record conversion, activation, support, refunds, and contribution separately by offer. Test later prices sequentially and transparently; never personalise price using grades, inferred vulnerability, urgency, or other student characteristics. |
+| Acquisition names six channels without a concentration rule | Several hours of daily founder effort can be spread too thinly to establish one repeatable channel | TikTok is the primary channel until it stops producing activated users. Run only one supporting experiment at a time: first creator-to-search repurposing, then parent content, referrals, adviser partnerships, and finally schools. Do not invest meaningful time in broad SEO before TikTok topics have revealed proven search intent. |
+| School outreach starts after the main consumer window | Long procurement cycles delay the largest plausible recurring revenue stream | Use the available adviser to refine the product and make introductions where appropriate. Begin buyer discovery and non-binding 2027 pilot reservations in August 2026, without building a school workspace before consumer usefulness is proven. Enter budget conversations in autumn 2026 rather than waiting until January 2027. |
+| Gross-revenue scenarios omit payment fees, refunds, support, data, tax, and acquisition | Attractive top-line scenarios can conceal poor economics | Make contribution per order and contribution by channel the financial authority. Gross revenue remains a demand indicator, not the scaling decision. |
+
+These decisions sharpen the route to revenue without widening the launch product, weakening the free outcome, or introducing paid ranking, behavioural advertising, student-data sales, or manipulative scarcity.
+
 ## The problem Routefinder solves
 
 The problem is not simply that students cannot find courses or vacancies. Free discovery products already exist.
@@ -51,6 +77,7 @@ The problem is not simply that students cannot find courses or vacancies. Free d
 The higher-value problem is that a student often cannot answer:
 
 - Which opportunities are realistic enough to investigate without treating any outcome as certain?
+- If I have no clear route yet, which route families and real examples are worth investigating next, and why?
 - Which published requirements appear to be met, unmet, ambiguous, or still unknown?
 - What experience or evidence could be used for each requirement?
 - Where are the material gaps?
@@ -69,9 +96,13 @@ Routefinder must make these answers visible, explainable, current, and actionabl
 - Is preparing for the 2027 entry cycle.
 - Is interested in technology, engineering, business, or finance.
 - May apply to university, higher or degree apprenticeships, or both.
-- Has enough intent to save opportunities and complete application-preparation tasks.
+- May be unsure, comparing a few ideas, or already focused on a real opportunity.
 
 The product remains useful to students choosing only one route. Applying to both is a supported workflow, not an onboarding requirement.
+
+### Launch acquisition wedge
+
+The first paid-acquisition and content campaigns target students in technology, engineering, business, and finance who are considering higher or degree apprenticeships alongside university backups. This wedge concentrates catalogue review, content, and user research where deadlines, rolling vacancies, and cross-route planning create acute need. It does not narrow the product's three starting points or prevent a university-only or apprenticeship-only student from using Routefinder.
 
 ### Geographic coverage
 
@@ -106,7 +137,7 @@ Do not pursue all of these simultaneously.
 
 ### Category
 
-Routefinder is an application-readiness workspace.
+Routefinder is an application-readiness and decision workspace.
 
 ### It is not
 
@@ -147,9 +178,17 @@ Routefinder should initially complement UCAS, employer systems, and school platf
 
 ## Core product workflow
 
-### 1. Five-minute readiness check
+### 1. Start at the student's current point
 
-Collect only information needed to improve the result:
+The first screen asks which statement is closest to the student's situation:
+
+1. **I have a real opportunity in mind.** Start with a reviewed course, vacancy, or official link. Show one source-backed requirement, a clearly limited initial check, and one useful next action.
+2. **I have a few ideas to compare.** Start with a small comparison set. Make the trade-offs, missing information, backup options, and next research action visible without declaring one route "best".
+3. **I am not sure yet.** Start with interests, constraints, values, preferred work styles, and what matters to the student, including financial and progression considerations. Return route families and real examples worth investigating, with reasons, uncertainty, and small exploration actions rather than a career diagnosis.
+
+Each path must produce a useful first result before demanding a complete profile. The target commercial experience permits a student to see this first result before account creation; an account is required to save progress, evidence, a portfolio, or a plan.
+
+Collect readiness information progressively and only when it improves the next result:
 
 - current year and intended application cycle;
 - home location and travel/relocation constraints;
@@ -160,7 +199,7 @@ Collect only information needed to improve the result:
 - existing experience, projects, responsibilities, and activities;
 - important constraints and missing information.
 
-The output is a starting strategy, not a declared destination.
+The output is a starting strategy, not a declared destination or prediction.
 
 ### 2. Opportunity shortlist
 
@@ -290,15 +329,19 @@ Free users must be able to make a real decision and complete a real action. The 
 
 Includes:
 
-- unlimited saved opportunities and evidence items;
+- more saved opportunities and unlimited evidence items;
 - up to 15 active applications at once;
-- complete evidence-to-requirement mapping;
+- expanded evidence-to-requirement views;
 - continuous weekly planning and deadline reminders;
 - full application tracker;
 - portfolio balance and backup prompts;
 - data export and priority support.
 
 AI feedback and student-controlled parent/adviser sharing are post-MVP capabilities. Do not advertise them as part of the launch offer until their safety, privacy, and fair-use boundaries are implemented and tested.
+
+The founding allocation is a research cohort. Show it truthfully, do not use a resetting countdown, and do not claim that conversion at GBP29 proves demand at GBP59. The standard offer remains the control until at least one cohort has reached the product-usefulness gate.
+
+The launch checkout may be paid with a parent or carer's card while the student remains signed in and owns the account. Checkout and receipts must make the product, access end date, refund route, and lack of parent account access clear. A separate delegated purchase link is a conversion experiment, not a launch dependency, and requires object-authorisation and privacy review before implementation.
 
 ### Routefinder Coach
 
@@ -312,16 +355,22 @@ Launch only after the self-service workflow converts and a qualified adviser pro
 
 Target direct delivery cost below GBP95 so gross margin remains above 60%. Limit availability rather than reducing quality.
 
+The available adviser makes Coach a viable second revenue line, but not a launch dependency. Open a no-payment interest list alongside Cycle. After the self-service workflow has at least 20 paying users, Gate 2 is directionally on track, and the adviser scope, safeguarding, quality, capacity, complaints, and insurance position are documented, run a maximum five-place Coach pilot. Measure adviser minutes, student usefulness, conversion from Cycle, and contribution before increasing capacity or price.
+
 ### Schools and colleges
 
 Begin with paid pilots after consumer activation and accuracy targets are met.
 
-- Pilot: GBP995 plus VAT for up to 250 Year 12/13 students for one academic year.
+- Pilot: GBP995 plus VAT for one defined cohort of up to 75 Year 12/13 students for one academic year.
 - Post-pilot target: GBP1,995 plus VAT for up to 250 students, then GBP4 per additional student.
 - Include onboarding, student workspace access, aggregate progress views, intervention flags, exports, and support.
 - Do not include a broad careers curriculum, MIS integration, or Gatsby reporting in the first pilot unless a buyer pays for and validates the need.
 
 Sell improved application execution and adviser visibility, not replacement of an established careers platform.
+
+The pilot price buys a bounded evaluation, not unlimited consultancy or a discounted whole-school licence. It requires a named buyer, success measures, an implementation owner, agreed support limits, and permission to use de-identified aggregate results. Case-study or reference participation may be requested but must not be a hidden condition of student access.
+
+Do not raise the post-pilot price merely to increase headline revenue. Test willingness to pay against completed actions, adviser time saved, and intervention usefulness. Morrisby advertises a broader school licence at GBP995, while Unifrog already has substantial school penetration. Routefinder must earn a premium through distinct execution evidence rather than feature-count claims.
 
 ### Future adviser licence
 
@@ -336,7 +385,7 @@ Consider only after at least five advisers repeatedly use student sharing:
 
 ### Revenue sequence
 
-1. Founding consumer payments prove willingness to pay.
+1. Founding consumer payments prove willingness to pay GBP29 and reveal support needs; they do not validate GBP59.
 2. Standard Cycle sales create scalable software revenue.
 3. Coach creates higher average order value and informs product development.
 4. School licences reduce reliance on seasonal consumer acquisition.
@@ -346,15 +395,22 @@ Consider only after at least five advisers repeatedly use student sharing:
 
 | Metric | Target |
 | --- | ---: |
-| Cycle gross margin before general overhead | at least 80% |
+| Standard Cycle gross margin before general overhead | at least 75% in validation and at least 80% before scale |
+| Founding Cycle contribution before founder time | positive; treated separately from standard pricing |
 | Coach gross margin | at least 60% |
 | School software/support gross margin | at least 75% |
-| Blended AI and data cost per Cycle user | below GBP5 |
+| Blended AI and data cost per Cycle user | below GBP3 at launch; any later AI allowance has its own budget |
 | Paid B2C customer acquisition cost | below GBP15 |
 | Refund rate | below 5% |
-| Support time per self-service paying user | below 20 minutes per cycle |
+| Median human support time per standard self-service paying user | below 10 minutes per cycle |
 
 Do not scale paid advertising while customer acquisition cost exceeds 25% of first-cycle revenue or while activated-to-paid conversion is below 8%.
+
+For each paid cohort calculate:
+
+> contribution per order = customer price - VAT or other applicable tax - payment fees - expected refunds and disputes - variable data and AI - fulfilment and support - attributable acquisition cost
+
+Use fully loaded support cost even when the founder performs the work. Stripe currently advertises 1.5% plus 20p for standard UK cards, so a GBP59 order loses about GBP1.09 to card processing before refunds, support, data, tax, or acquisition. The founding offer cannot meet the scalable margin target if it requires normal paid acquisition or high-touch support; its purpose is validation.
 
 ### Planning scenarios
 
@@ -365,9 +421,19 @@ These are operating scenarios, not forecasts.
 | Validation | 50 at GBP29 | 2 at GBP249 | 0 | GBP1,948 |
 | Initial traction | 250 at blended GBP50 | 20 at GBP249 | 3 at GBP995 | GBP20,465 |
 | Strong first full cycle | 1,000 at GBP59 | 100 at GBP249 | 20 at blended GBP1,500 | GBP113,900 |
-| Scale signal | 5,000 at GBP59 | 300 at GBP249 | 75 at GBP1,995 | GBP519,225 |
+| Scale signal | 5,000 at GBP59 | 300 at GBP249 | 75 at GBP1,995 | GBP519,325 |
 
 The initial UK niche can support a meaningful company but not an enormous outcome by itself. A much larger business requires proven expansion into more subjects, more year groups, institutional distribution, and eventually further geographies. Expansion before product-market fit would reduce the probability of reaching that point.
+
+The first-year operating objective is the `Initial traction` scenario, with the `Strong first full cycle` scenario as a stretch unlocked only by positive standard-price contribution and sustained product usefulness. TikTok reach does not justify adopting the stretch case until its downstream funnel is measured.
+
+For organic short-form planning, use:
+
+> expected Cycle orders = qualified views x landing-page visit rate x activation rate x activated-to-paid rate
+
+At the existing monetisation gates, 1,000 Cycle orders require 12,500 activated students. At 50% visitor-to-activation, that requires 25,000 qualified landing-page visitors. The view volume required depends entirely on the currently unknown view-to-qualified-visit rate: 2.5 million views at 1%, or 10 million views at 0.25%. These are sensitivity examples, not conversion benchmarks or forecasts.
+
+Every scenario must also show net payment revenue, expected refunds, direct support and fulfilment cost, attributable acquisition spend, and contribution. Do not use gross revenue alone to approve hiring, paid acquisition, or a new product line.
 
 ## Acquisition and growth
 
@@ -376,22 +442,50 @@ Distribution is part of the product and receives weekly founder time from the be
 ### Primary acquisition loop
 
 1. A student discovers a useful deadline, requirement, employer-process, or comparison page through search or short-form content.
-2. The page leads to the free readiness check.
+2. The page leads to `/start`, where the student chooses focused, comparing, or unsure and receives one account-free result before sign-in.
 3. The student saves three opportunities and receives a first evidence gap and action.
 4. The student returns through a useful deadline or weekly-action reminder.
 5. A portfolio limit, repeated preparation need, or parent/adviser share creates the paid moment.
 6. The completed action or shareable summary creates a referral.
 
+The returning-user step is currently the weakest part of this loop. On-site deadline and weekly-action notices are launch capabilities; email or messaging reminders are not assumed until a named processor, lawful basis or consent, unsubscribe behaviour, retention, deliverability, and operational ownership are documented. Do not describe an on-site notice as an email alert.
+
 ### Channel priority
 
-1. High-intent SEO and answer pages.
-2. TikTok, YouTube Shorts, Instagram Reels, and longer YouTube explainers.
+1. The founder's existing TikTok account and native short-form series.
+2. High-intent landing pages and answer pages derived from TikTok topics that produce qualified clicks.
 3. Student referrals and ambassadors.
 4. Parent webinars and parent-focused search content.
-5. Careers advisers, tutors, sixth forms, colleges, and access organisations.
+5. The existing adviser relationship, then careers advisers, tutors, sixth forms, colleges, and access organisations.
 6. Carefully tested paid search and retargeting after conversion is proven.
 
 Do not begin with broad paid social acquisition.
+
+### TikTok operating system
+
+Views are an input, not the success metric. Each series uses one problem, one audience, one tracked landing page, and one call to action. The founder publishes useful material even when the viewer never buys; urgency and scarcity claims must be factual.
+
+Use a weekly cycle:
+
+1. publish three to five variations on one proven application-readiness problem;
+2. send interested viewers to a matching landing page, not a generic homepage;
+3. measure qualified clicks, readiness starts, activations, paywall views, payments, refunds, and useful actions by series;
+4. interview at least two activated users from the strongest series;
+5. keep, revise, or stop the series using downstream behaviour rather than views alone;
+6. repurpose only winning topics into search pages, email or webinar material, and longer video.
+
+Do not attempt daily production across TikTok, YouTube, Instagram, SEO, webinars, and school outreach simultaneously. Cross-posting a proven asset is acceptable, but TikTok receives the original creative effort until another channel demonstrates better contribution per founder hour.
+
+The first content-to-product tests are:
+
+- compare a degree apprenticeship with a related university route;
+- help a student with no clear route identify two route families worth investigating next;
+- turn one published opportunity into a requirements-to-evidence example;
+- identify one commonly missed application task before a real deadline;
+- show how to build a balanced university and apprenticeship portfolio;
+- explain to parents how to support without taking over student-owned work.
+
+Only promote a sector or route slice after its fixed-persona catalogue coverage gate passes. Demand may determine which slice is promoted, but it never changes result ordering for an individual student.
 
 ### Content strategy
 
@@ -421,7 +515,8 @@ Every page must have an update owner, source, last-reviewed date, and clear rout
 - Use evidence from consumer users to identify recurring adviser problems.
 - Recruit three design-partner schools, but charge for pilots.
 - Show completed actions, missing evidence, deadline risk, and adviser time saved.
-- Start 2027/28 budget conversations from January 2027.
+- Use the existing adviser for buyer-language review, warm introductions where appropriate, and quality assurance; do not make one adviser the sole delivery dependency.
+- Start buyer discovery and non-binding pilot reservations in August 2026, and 2027/28 budget conversations in autumn 2026.
 - Keep onboarding under two hours and avoid custom development for one school.
 
 ## Validation gates
@@ -441,14 +536,16 @@ Before taking payments:
 
 ### Gate 1: customer-ready MVP
 
-Before opening payments on 15 October 2026:
+Before opening payments, targeted from 15 September 2026 and no later than 15 October 2026 for the planned main cohort:
 
 - the production activation flow works from account creation through a completed weekly action;
 - authentication, object-level authorisation, export, deletion, backups, and payments pass;
 - every published opportunity is reviewed and source-backed;
+- every promoted acquisition slice passes the fixed-persona catalogue coverage gate, with at least three genuinely relevant, open, source-backed opportunities for every promoted persona;
 - no demo record or total score appears in the commercial workflow;
 - privacy, safeguarding, accessibility, refund, complaints, and support baselines have specialist review;
 - mobile, keyboard, and WCAG 2.2 AA checks pass.
+- the coarse `/api/readiness` gate passes and `PAYMENTS_ENABLED` remains `false` until the founder deliberately performs the final post-approval toggle;
 
 Do not take customer payment before this gate passes.
 
@@ -468,6 +565,8 @@ If students use discovery but do not complete actions, the core workflow has fai
 
 - at least 8% of activated users buy Cycle;
 - at least 15% of users who view the paywall begin checkout;
+- the GBP59 cohort is measured separately from the GBP29 founding cohort;
+- standard Cycle produces positive contribution after payment fees, refunds, variable data, support, and attributable acquisition;
 - refunds remain below 5%;
 - paid acquisition stays paused until organic or partner-acquired cohorts meet these thresholds.
 
@@ -482,9 +581,11 @@ If students use discovery but do not complete actions, the core workflow has fai
 
 ### Activation
 
+A **first useful result** occurs when a student receives a relevant, explainable route or opportunity result and one useful next action from their selected starting point.
+
 A student activates after:
 
-1. completing the readiness check;
+1. completing the readiness details relevant to their selected starting point;
 2. saving at least three real opportunities;
 3. adding at least one genuine evidence example; and
 4. scheduling or completing one useful action.
@@ -512,6 +613,22 @@ This is more useful than daily active users because the product should improve p
 - acquisition source and activation by channel;
 - contribution margin by product;
 - account export and deletion requests.
+
+### Commercial funnel
+
+Keep these denominators separate by offer, acquisition series, sector, route intent, and application cycle:
+
+1. qualified landing-page visitor;
+2. readiness-check starter;
+3. readiness-check completer;
+4. activated student;
+5. paywall viewer;
+6. checkout starter;
+7. completed payer;
+8. refunded or disputed payer;
+9. retained payer with positive contribution.
+
+Report visitor-to-paid, activated-to-paid, paywall-to-checkout, checkout-to-paid, revenue per qualified visitor, contribution per activated user, contribution per founder hour, and time to pay. Do not optimise checkout conversion in isolation: an earlier paywall can raise checkout rate while reducing activation, trust, and total contribution.
 
 ## Data strategy
 
@@ -704,24 +821,30 @@ Agents and automation may research, extract, classify, draft, test, and monitor.
 - stabilise the repository and release pipeline;
 - establish Vercel, Supabase, authentication, secure persistence, consent, export, and deletion;
 - confirm initial data licences and source access;
-- draft privacy, safety, refund, safeguarding, complaints, and accessibility baselines.
+- draft privacy, safety, refund, safeguarding, complaints, and accessibility baselines;
+- open a no-payment TikTok waitlist and run observed tests with students and parents or carers;
+- begin school buyer discovery without promising an institutional product.
 
 ### 17 August to 13 September 2026
 
-- replace the quiz with the readiness check;
+- replace readiness-first entry with the three approved starting points: unsure, comparing, or focused on a real opportunity;
 - build the reviewed catalogue and opportunity shortlist;
 - implement the five separate decision views;
-- preserve the prototype under a clearly labelled demo boundary.
+- preserve the prototype under a clearly labelled demo boundary;
+- run a free, observed beta against fixed activation and catalogue-coverage personas;
+- decide by 15 September whether the complete paid gate supports early-deadline applicants; if it does not, exclude that promise from paid acquisition.
 
 ### 14 September to 14 October 2026
 
 - ship evidence mapping, gap analysis, weekly actions, tracking, entitlements, and payments;
 - publish the first high-intent content cluster;
-- complete the DPIA, specialist policy review, accessibility review, threat model, restore test, and production smoke tests.
+- complete the DPIA, specialist policy review, accessibility review, threat model, restore test, and production smoke tests;
+- open the capped founding cohort from 15 September only if Gate 1 passes completely;
+- otherwise build the qualified January-deadline and rolling-apprenticeship waitlist while payments remain closed.
 
-### 15 October 2026
+### 15 October 2026 latest planned paid opening
 
-- open the customer-ready MVP and founding-launch price;
+- open the customer-ready MVP and founding-launch price if Gate 1 has passed; the date never overrides a failed gate;
 - monitor activation, source issues, payments, refunds, support, and completed weekly actions;
 - operate it as the complete, supported MVP described in this document.
 
@@ -731,7 +854,7 @@ Agents and automation may research, extract, classify, draft, test, and monitor.
 - expand only within the four launch sectors;
 - add AI feedback, sharing, or structured practice only after their post-MVP gates pass;
 - develop the referral and parent webinar loops;
-- begin conversations for three paid school pilots.
+- convert earlier school discovery into three bounded paid-pilot proposals.
 
 ### February to July 2027
 
@@ -753,6 +876,7 @@ Agents and automation may research, extract, classify, draft, test, and monitor.
 - [UCAS 2027 application dates](https://www.ucas.com/advisers/help-and-training/key-dates-timeline)
 - [DfE careers guidance and provider-access duties](https://www.gov.uk/government/publications/careers-guidance-provision-for-young-people-in-schools/careers-guidance-and-access-for-education-and-training-providers)
 - [DfE guidance on generative AI and school data protection](https://www.gov.uk/guidance/data-protection-in-schools/generative-artificial-intelligence-ai-and-data-protection-in-schools)
+- [Stripe UK standard payment pricing](https://stripe.com/gb/pricing)
 
 ## Final decision rule
 

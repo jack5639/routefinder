@@ -21,8 +21,8 @@ const exportedTables = [
   "analytics_events",
 ] as const;
 
-export async function GET() {
-  const context = await getMutationApiContext();
+export async function GET(request: Request) {
+  const context = await getMutationApiContext(request);
   if (!context) return apiError("Sign in to export your data.", 401, "unauthorised");
 
   const entries = await Promise.all(

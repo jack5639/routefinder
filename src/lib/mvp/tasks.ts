@@ -3,6 +3,10 @@ import type { RequirementAssessmentState } from "@/lib/mvp/requirement-assessmen
 
 export interface TaskCandidate {
   id: string;
+  portfolioItemId?: string;
+  opportunityTitle?: string;
+  providerName?: string;
+  sharedGapKey?: string;
   title: string;
   whyItMatters: string;
   effortMinutes: number;
@@ -12,6 +16,20 @@ export interface TaskCandidate {
   requirementState?: RequirementAssessmentState;
   applicationStageBlocked?: boolean;
   sharedOpportunityCount?: number;
+}
+
+export function applySharedOpportunityCounts(candidates: TaskCandidate[]) {
+  const opportunitiesByGap = new Map<string, Set<string>>();
+  for (const candidate of candidates) {
+    if (!candidate.sharedGapKey || !candidate.portfolioItemId) continue;
+    const ids = opportunitiesByGap.get(candidate.sharedGapKey) ?? new Set<string>();
+    ids.add(candidate.portfolioItemId);
+    opportunitiesByGap.set(candidate.sharedGapKey, ids);
+  }
+  return candidates.map((candidate) => ({
+    ...candidate,
+    sharedOpportunityCount: candidate.sharedGapKey ? opportunitiesByGap.get(candidate.sharedGapKey)?.size ?? 1 : 1,
+  }));
 }
 
 function priority(candidate: TaskCandidate, now: Date) {
@@ -38,10 +56,18 @@ function priority(candidate: TaskCandidate, now: Date) {
 }
 
 export function selectThisWeek(candidates: TaskCandidate[], now = new Date()) {
-  return [...candidates]
+  const ranked = [...candidates]
     .sort((a, b) => {
       const difference = priority(b, now) - priority(a, now);
       return difference || a.id.localeCompare(b.id);
-    })
-    .slice(0, 3);
+    });
+  const selected: TaskCandidate[] = [];
+  const selectedGaps = new Set<string>();
+  for (const candidate of ranked) {
+    if (candidate.sharedGapKey && selectedGaps.has(candidate.sharedGapKey)) continue;
+    selected.push(candidate);
+    if (candidate.sharedGapKey) selectedGaps.add(candidate.sharedGapKey);
+    if (selected.length === 3) break;
+  }
+  return selected;
 }

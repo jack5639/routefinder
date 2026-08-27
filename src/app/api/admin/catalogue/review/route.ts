@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { apiError, getApiContext, parseJson } from "@/lib/api-context";
+import { isSameOriginRequest } from "@/lib/same-origin";
 import { createAdminClient, isAdminEmail } from "@/lib/supabase/admin";
 
 const reviewSchema = z.object({
@@ -12,6 +13,7 @@ const reviewSchema = z.object({
 const revisionSchema = z.object({ revisionId: z.string().uuid(), action: z.enum(["accept", "reject", "supersede", "withdraw"]), note: z.string().trim().min(3).max(1000) });
 
 export async function POST(request: Request) {
+  if (!isSameOriginRequest(request)) return apiError("Cross-origin requests are not allowed.", 403, "cross-origin");
   const context = await getApiContext();
   if (!context || !isAdminEmail(context.user.email)) return apiError("Admin access required.", 403, "forbidden");
   const body = await parseJson(request);

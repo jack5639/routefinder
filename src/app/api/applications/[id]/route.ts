@@ -12,7 +12,7 @@ const patchSchema = z.object({
 });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const context = await getMutationApiContext();
+  const context = await getMutationApiContext(request);
   if (!context) return apiError("Sign in to update an application.", 401, "unauthorised");
   const parsed = patchSchema.safeParse(await parseJson(request));
   if (!parsed.success) return apiError("Check the application update and try again.");
@@ -45,11 +45,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   return NextResponse.json({ application: data });
 }
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const context = await getMutationApiContext();
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const context = await getMutationApiContext(request);
   if (!context) return apiError("Sign in to remove an application.", 401, "unauthorised");
   const { id } = await params;
-  const { error } = await context.admin.from("applications").delete().eq("id", id).eq("user_id", context.user.id);
+  const { data, error } = await context.admin
+    .from("applications")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", context.user.id)
+    .select("id")
+    .maybeSingle();
   if (error) return apiError("The application could not be removed.", 404, "not-found");
+  if (!data) return apiError("That application was not found.", 404, "not-found");
   return new NextResponse(null, { status: 204 });
 }

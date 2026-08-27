@@ -12,9 +12,9 @@ type Evidence = {
   supporting_detail?: string;
   evidence_date?: string;
   archived: boolean;
-  evidence_requirement_links?: Array<{ id: string; evidence_id: string; requirement_id: string; relevance: string; coverage: string; missing_specificity?: string; confirmed_by_student: boolean; assessment_version: number; requirements?: { label: string; opportunities?: { title: string } | Array<{ title: string }> } }>;
+  evidence_requirement_links?: Array<{ id: string; evidence_id: string; requirement_id: string; relevance: string; coverage: string; missing_specificity?: string; confirmed_by_student: boolean; assessment_version: number; requirements?: { label: string; kind: string; hard_requirement: boolean; opportunities?: { title: string } | Array<{ title: string }> } }>;
 };
-type RequirementOption = { id: string; label: string; opportunity: string };
+type RequirementOption = { id: string; label: string; opportunity: string; kind: string; hardRequirement: boolean };
 
 export function EvidenceBank() {
   const [items, setItems] = useState<Evidence[]>([]);
@@ -27,8 +27,10 @@ export function EvidenceBank() {
     const portfolioResult = await portfolioResponse.json();
     setItems(evidenceResult.items ?? []);
     setRequirements(
-      (portfolioResult.items ?? []).flatMap((item: { title: string; requirements: Array<{ id: string; label: string }> }) =>
-        item.requirements.map((requirement) => ({ id: requirement.id, label: requirement.label, opportunity: item.title })),
+      (portfolioResult.items ?? []).flatMap((item: { title: string; requirements: Array<{ id: string; label: string; kind: string; hardRequirement: boolean }> }) =>
+        item.requirements
+          .filter((requirement) => !(requirement.hardRequirement && requirement.kind === "grade"))
+          .map((requirement) => ({ id: requirement.id, label: requirement.label, opportunity: item.title, kind: requirement.kind, hardRequirement: requirement.hardRequirement })),
       ),
     );
   }
@@ -154,8 +156,9 @@ export function EvidenceBank() {
                 <button onClick={() => void unlink(link.id)} className="shrink-0 rounded-full bg-white px-3 py-2 text-xs font-black">Unlink</button>
                 </div>
                 <p className="mt-2 text-xs font-semibold text-ink/65">Why it relates: {link.relevance} · {link.confirmed_by_student ? "Student confirmed" : "Needs confirmation"} · assessment v{link.assessment_version}</p>
+                {link.requirements?.hard_requirement && link.requirements.kind === "grade" ? <p className="mt-2 rounded-lg bg-coral/10 p-2 text-xs font-bold">Legacy link: this evidence does not affect the hard grade assessment. Qualifications are the only input. You can safely unlink it.</p> : null}
                 {link.missing_specificity && <p className="mt-1 text-xs font-semibold text-ink/65">Missing detail: {link.missing_specificity}</p>}
-                <details className="mt-3"><summary className="cursor-pointer text-xs font-black">Edit mapping</summary><form onSubmit={(event) => void updateLink(event, link)} className="mt-3 grid gap-2"><input required minLength={5} name="relevance" defaultValue={link.relevance} className="min-h-10 rounded-xl bg-white px-3" aria-label="Why this evidence relates" /><select name="coverage" defaultValue={link.coverage} className="min-h-10 rounded-xl bg-white px-3" aria-label="Coverage strength"><option value="supported">Supported</option><option value="weak">Weak or incomplete</option><option value="missing">Not evidenced</option><option value="apparently-unmet">Apparently unmet</option><option value="needs-confirmation">Direct confirmation needed</option></select><textarea name="missingSpecificity" defaultValue={link.missing_specificity ?? ""} className="min-h-16 rounded-xl bg-white p-3" placeholder="What detail is missing?" aria-label="Missing detail" /><label className="flex items-center gap-2 text-xs"><input type="checkbox" name="confirmedByStudent" defaultChecked={link.confirmed_by_student} /> I confirm this reflects my genuine evidence</label><button className="rounded-full bg-ink px-3 py-2 text-xs font-black text-white">Save mapping</button></form></details>
+                {!(link.requirements?.hard_requirement && link.requirements.kind === "grade") ? <details className="mt-3"><summary className="cursor-pointer text-xs font-black">Edit mapping</summary><form onSubmit={(event) => void updateLink(event, link)} className="mt-3 grid gap-2"><input required minLength={5} name="relevance" defaultValue={link.relevance} className="min-h-10 rounded-xl bg-white px-3" aria-label="Why this evidence relates" /><select name="coverage" defaultValue={link.coverage} className="min-h-10 rounded-xl bg-white px-3" aria-label="Coverage strength"><option value="supported">Supported</option><option value="weak">Weak or incomplete</option><option value="missing">Not evidenced</option><option value="apparently-unmet">Apparently unmet</option><option value="needs-confirmation">Direct confirmation needed</option></select><textarea name="missingSpecificity" defaultValue={link.missing_specificity ?? ""} className="min-h-16 rounded-xl bg-white p-3" placeholder="What detail is missing?" aria-label="Missing detail" /><label className="flex items-center gap-2 text-xs"><input type="checkbox" name="confirmedByStudent" defaultChecked={link.confirmed_by_student} /> I confirm this reflects my genuine evidence</label><button className="rounded-full bg-ink px-3 py-2 text-xs font-black text-white">Save mapping</button></form></details> : null}
               </div>
             ))}
             {!item.archived && (

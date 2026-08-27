@@ -24,18 +24,36 @@ export function OpportunitySearch() {
   const [items, setItems] = useState<Opportunity[]>([]);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
+  const [catalogueState, setCatalogueState] = useState<"ready" | "unconfigured" | "unavailable">("ready");
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
 
-  async function search(params = "") {
+  async function search(params = "", requestedPage = 1) {
     setLoading(true);
-    const response = await fetch(`/api/opportunities${params}`);
-    const result = await response.json();
-    setItems(result.opportunities ?? []);
-    setNotice(result.configured === false ? "The verified catalogue is not connected in this environment." : "");
-    setLoading(false);
+    setNotice("");
+    try {
+      const searchParams = new URLSearchParams(params);
+      searchParams.set("page", String(requestedPage));
+      const response = await fetch(`/api/opportunities?${searchParams}`);
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error?.message ?? "Opportunity search is temporarily unavailable.");
+      setItems(result.opportunities ?? []);
+      setPage(result.pagination?.page ?? requestedPage);
+      setHasMore(Boolean(result.pagination?.hasMore));
+      setCatalogueState(result.configured === false ? "unconfigured" : "ready");
+    } catch (error) {
+      setItems([]);
+      setHasMore(false);
+      setCatalogueState("unavailable");
+      setNotice(error instanceof Error ? error.message : "Opportunity search is temporarily unavailable.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void search(), 0);
+    const timer = window.setTimeout(() => void search("", 1), 0);
     return () => window.clearTimeout(timer);
   }, []);
 
@@ -47,7 +65,9 @@ export function OpportunitySearch() {
       const value = String(data.get(key) ?? "");
       if (value) params.set(key, value);
     }
-    void search(`?${params}`);
+    const nextQuery = params.toString();
+    setQuery(nextQuery);
+    void search(nextQuery, 1);
   }
 
   async function save(id: string) {
@@ -70,9 +90,17 @@ export function OpportunitySearch() {
         <input aria-label="Location" name="location" placeholder="Location" className="min-h-12 rounded-2xl border border-ink/10 bg-white px-4 font-semibold" />
         <button className="min-h-12 rounded-2xl bg-ink px-5 font-black text-white">Search</button>
       </form>
-      {notice && <p role="status" className="mt-5 rounded-2xl bg-sky p-4 font-bold">{notice}</p>}
+      {catalogueState === "unconfigured" && <p role="status" className="mt-5 rounded-2xl bg-sky p-4 font-bold">The reviewed catalogue is not connected in this environment. No results can be checked here yet.</p>}
+      {notice && <p role={catalogueState === "unavailable" ? "alert" : "status"} className="mt-5 rounded-2xl bg-sky p-4 font-bold">{notice}</p>}
       {loading ? <p role="status" className="mt-6 rounded-2xl bg-white p-6 font-semibold">Checking published opportunities…</p> : null}
-      {!loading && items.length === 0 ? (
+      {!loading && catalogueState === "unavailable" ? (
+        <section className="mt-6 rounded-[2rem] border border-coral/30 bg-white/70 p-8 text-center">
+          <h2 className="text-2xl font-black">Search is temporarily unavailable</h2>
+          <p className="mx-auto mt-3 max-w-xl font-semibold leading-7 text-ink/60">Nothing has been inferred from missing data. Try the reviewed catalogue again.</p>
+          <button type="button" onClick={() => void search(query, page)} className="mt-5 min-h-11 rounded-full bg-ink px-5 text-sm font-black text-white">Retry search</button>
+        </section>
+      ) : null}
+      {!loading && catalogueState === "ready" && items.length === 0 ? (
         <section className="mt-6 rounded-[2rem] border border-dashed border-ink/20 bg-white/60 p-10 text-center">
           <h2 className="text-2xl font-black">No reviewed opportunities match yet</h2>
           <p className="mx-auto mt-3 max-w-xl font-semibold leading-7 text-ink/60">Coverage is shown honestly. Try broader filters or add an external opportunity to your portfolio as needs checking.</p>
@@ -110,6 +138,13 @@ export function OpportunitySearch() {
           );
         })}
       </div>
+      {!loading && catalogueState === "ready" && (page > 1 || hasMore) ? (
+        <nav aria-label="Opportunity result pages" className="mt-6 flex items-center justify-center gap-3">
+          <button type="button" disabled={page === 1} onClick={() => void search(query, page - 1)} className="min-h-11 rounded-full border border-ink/15 bg-white px-5 text-sm font-black disabled:opacity-40">Previous</button>
+          <span className="text-sm font-bold text-ink/60">Page {page}</span>
+          <button type="button" disabled={!hasMore} onClick={() => void search(query, page + 1)} className="min-h-11 rounded-full border border-ink/15 bg-white px-5 text-sm font-black disabled:opacity-40">Next</button>
+        </nav>
+      ) : null}
     </>
   );
 }

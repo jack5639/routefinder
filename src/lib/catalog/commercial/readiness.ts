@@ -1,7 +1,9 @@
 import { parseEligibilityRule } from "@/lib/scoring/eligibility-rules";
+import { launchApplicationCycle, sourceFreshnessLimitDays } from "./policy";
 
 export const launchCatalogueSectors = ["technology", "engineering", "business", "finance"] as const;
 export const launchCatalogueKinds = ["university-course", "apprenticeship-vacancy"] as const;
+export { launchApplicationCycle };
 
 export type LaunchCatalogueSector = (typeof launchCatalogueSectors)[number];
 export type LaunchCatalogueKind = (typeof launchCatalogueKinds)[number];
@@ -30,8 +32,8 @@ export interface ReadinessOpportunity {
   source_url?: string | null;
   source_authority?: string | null;
   source_id?: string | null;
-  source_approval_reference?: string | null;
   attribution?: unknown;
+  application_cycle?: number | null;
   deadline?: string | null;
   verified_at?: string | null;
   freshness?: string | null;
@@ -55,18 +57,31 @@ export interface ReadinessSourceRun {
   records_changed?: number | null;
 }
 
+export interface CatalogueSourceAttestation {
+  source_authority: string;
+  attested_at: string;
+  revoked_at?: string | null;
+}
+
 export interface CatalogueReadinessReport {
   ready: boolean;
   minimum: number;
   published: number;
   routeTotals: Record<LaunchCatalogueKind, number>;
-  distribution: Array<{ sector: LaunchCatalogueSector; kind: LaunchCatalogueKind; count: number; shortfall: number }>;
+  distribution: Array<{
+    sector: LaunchCatalogueSector;
+    kind: LaunchCatalogueKind;
+    count: number;
+    shortfall: number;
+    candidates: number;
+    distinctCandidateProviders: number;
+  }>;
   diversity: Record<LaunchCatalogueKind, { distinctProviders: number; largestProviderShare: number; passes: boolean }>;
   counts: {
     openCurrent: number;
     unclassified: number;
     missingOrExpiredVerification: number;
-    missingOrInvalidSourceApproval: number;
+    missingOrInvalidSourceAttestation: number;
     missingAttribution: number;
     missingUnsupportedOrConflictingRequirements: number;
     pendingRevisions: number;
@@ -85,6 +100,15 @@ export interface CatalogueReadinessReport {
     lastCompleteSnapshotAt?: string;
     stale: boolean;
   }>;
+  promotedPersonaCoverage: Array<{
+    id: string;
+    label: string;
+    kind: LaunchCatalogueKind;
+    sector: LaunchCatalogueSector;
+    relevantOpenSourceBacked: number;
+    minimum: number;
+    passes: boolean;
+  }>;
   globalReasons: string[];
 }
 
@@ -92,7 +116,7 @@ const HESA_LICENCE = "https://creativecommons.org/licenses/by/4.0/";
 const nonEmpty = (value: unknown) => typeof value === "string" && value.trim().length > 0;
 const isPast = (value: string | null | undefined, now: Date) => Boolean(value && new Date(value).getTime() < now.getTime());
 const isExpired = (value: string | null | undefined, now: Date) => !value || new Date(value).getTime() <= now.getTime();
-const sourceNeedsApproval = (authority: string | null | undefined) =>
+const sourceNeedsAttestation = (authority: string | null | undefined) =>
   authority === "find-an-apprenticeship-api-v2" || authority === "discover-uni-hesa";
 
 function hasDiscoverUniAttribution(value: unknown) {
@@ -103,7 +127,11 @@ function hasDiscoverUniAttribution(value: unknown) {
     && nonEmpty(attribution.changes);
 }
 
-export function opportunityPublicationFailures(opportunity: ReadinessOpportunity, now = new Date()) {
+export function opportunityPublicationFailures(
+  opportunity: ReadinessOpportunity,
+  now = new Date(),
+  sourceAttestations: CatalogueSourceAttestation[] = [],
+) {
   const failures: string[] = [];
   const requirements = opportunity.requirements ?? [];
   const publishedRequirements = requirements.filter((item) => item.publication_state === "published");
@@ -115,7 +143,10 @@ export function opportunityPublicationFailures(opportunity: ReadinessOpportunity
   if (!nonEmpty(opportunity.source_url)) failures.push("Opportunity source URL is missing.");
   if (!opportunity.verified_at || isPast(opportunity.verified_at, new Date(now.getTime() - 30 * 86_400_000))) failures.push("Opportunity verification is missing or older than 30 days.");
   if (!["high", "medium"].includes(opportunity.freshness ?? "") || isExpired(opportunity.freshness_expires_at, now)) failures.push("Opportunity freshness is expired or needs checking.");
-  if (sourceNeedsApproval(opportunity.source_authority) && !nonEmpty(opportunity.source_approval_reference)) failures.push("Source approval reference is missing.");
+  if (opportunity.kind === "university-course" && opportunity.application_cycle !== launchApplicationCycle) failures.push(`University course is not verified for the ${launchApplicationCycle} application cycle.`);
+  if (sourceNeedsAttestation(opportunity.source_authority) && !sourceAttestations.some((attestation) =>
+    attestation.source_authority === opportunity.source_authority && !attestation.revoked_at,
+  )) failures.push("Source permission has not been attested by an administrator.");
   if (opportunity.source_authority === "discover-uni-hesa" && !hasDiscoverUniAttribution(opportunity.attribution)) failures.push("Required Discover Uni/HESA attribution is missing.");
   if ((opportunity.catalogue_fact_revisions ?? []).some((item) => item.status === "pending")) failures.push("A material source revision is awaiting review.");
   if ((opportunity.source_issues ?? []).some((item) => item.status !== "resolved")) failures.push("A source issue is unresolved.");
@@ -143,12 +174,13 @@ export function evaluateCatalogueReadiness(
   opportunities: ReadinessOpportunity[],
   runs: ReadinessSourceRun[] = [],
   now = new Date(),
+  sourceAttestations: CatalogueSourceAttestation[] = [],
 ): CatalogueReadinessReport {
   const published = opportunities.filter((row) => row.publication_state === "published");
   const duplicateDestinations = duplicateKeys(published, (row) => row.application_url);
   const duplicateSourceIds = duplicateKeys(published, (row) => row.source_authority && row.source_id ? `${row.source_authority}:${row.source_id}` : null);
   const blockingRecords = published.flatMap((row) => {
-    const reasons = opportunityPublicationFailures(row, now);
+    const reasons = opportunityPublicationFailures(row, now, sourceAttestations);
     const destination = row.application_url?.trim().toLowerCase();
     const sourceKey = row.source_authority && row.source_id ? `${row.source_authority}:${row.source_id}`.toLowerCase() : undefined;
     if (destination && duplicateDestinations.has(destination)) reasons.push("Official application destination is duplicated.");
@@ -158,7 +190,21 @@ export function evaluateCatalogueReadiness(
   const routeTotals = Object.fromEntries(launchCatalogueKinds.map((kind) => [kind, published.filter((row) => row.kind === kind).length])) as Record<LaunchCatalogueKind, number>;
   const distribution = launchCatalogueSectors.flatMap((sector) => launchCatalogueKinds.map((kind) => {
     const count = published.filter((row) => row.sector === sector && row.kind === kind).length;
-    return { sector, kind, count, shortfall: Math.max(0, 10 - count) };
+    const candidates = opportunities.filter((row) =>
+      row.sector === sector
+      && row.kind === kind
+      && ["draft", "review"].includes(row.publication_state),
+    );
+    return {
+      sector,
+      kind,
+      count,
+      shortfall: Math.max(0, 10 - count),
+      candidates: candidates.length,
+      distinctCandidateProviders: new Set(
+        candidates.flatMap((row) => nonEmpty(row.provider_name) ? [row.provider_name!.trim().toLowerCase()] : []),
+      ).size,
+    };
   }));
   const diversity = Object.fromEntries(launchCatalogueKinds.map((kind) => {
     const rows = published.filter((row) => row.kind === kind);
@@ -175,7 +221,7 @@ export function evaluateCatalogueReadiness(
   const sourceRuns = [...latestBySource].map(([sourceAuthority, sourceRows]) => {
     const ordered = sourceRows.sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
     const complete = ordered.find((run) => run.status === "completed" && run.complete_snapshot);
-    const staleAfterDays = sourceAuthority === "discover-uni-hesa" ? 8 : 1;
+    const staleAfterDays = sourceFreshnessLimitDays[sourceAuthority as keyof typeof sourceFreshnessLimitDays] ?? 1;
     return {
       sourceAuthority,
       latestStatus: ordered[0]?.status,
@@ -184,6 +230,21 @@ export function evaluateCatalogueReadiness(
       stale: !complete?.completed_at || isPast(complete.completed_at, new Date(now.getTime() - staleAfterDays * 86_400_000)),
     };
   });
+  const promotedPersonas = launchCatalogueSectors.flatMap((sector) => launchCatalogueKinds.map((kind) => ({
+    id: `${sector}-${kind}`,
+    label: `${sector} ${kind === "university-course" ? "university" : "apprenticeship"} applicant`,
+    sector,
+    kind,
+  })));
+  const promotedPersonaCoverage = promotedPersonas.map((persona) => {
+    const relevantOpenSourceBacked = published.filter((row) =>
+      row.sector === persona.sector
+      && row.kind === persona.kind
+      && row.state === "open"
+      && opportunityPublicationFailures(row, now, sourceAttestations).length === 0,
+    ).length;
+    return { ...persona, relevantOpenSourceBacked, minimum: 3, passes: relevantOpenSourceBacked >= 3 };
+  });
   const globalReasons: string[] = [];
   if (published.length < 80) globalReasons.push(`Published catalogue is ${80 - published.length} records below the launch minimum.`);
   for (const item of distribution) if (item.shortfall) globalReasons.push(`${item.sector} ${item.kind} is ${item.shortfall} below its minimum.`);
@@ -191,9 +252,10 @@ export function evaluateCatalogueReadiness(
   for (const kind of launchCatalogueKinds) if (!diversity[kind].passes) globalReasons.push(`${kind} provider or employer diversity is below the launch rule.`);
   if (blockingRecords.length) globalReasons.push(`${blockingRecords.length} published records fail publication readiness.`);
   if (sourceRuns.some((run) => run.stale || run.latestStatus !== "completed")) globalReasons.push("A required source has no recent complete successful snapshot.");
+  for (const persona of promotedPersonaCoverage) if (!persona.passes) globalReasons.push(`${persona.label} has ${persona.relevantOpenSourceBacked} relevant open source-backed opportunities; at least ${persona.minimum} are required.`);
   const queue = opportunities
     .map((row) => {
-      const reasons = opportunityPublicationFailures(row, now);
+      const reasons = opportunityPublicationFailures(row, now, sourceAttestations);
       const urgency = reasons.length * 10
         + ((row.catalogue_fact_revisions ?? []).some((item) => item.status === "pending") ? 30 : 0)
         + ((row.source_issues ?? []).some((item) => item.status !== "resolved") ? 25 : 0)
@@ -213,10 +275,10 @@ export function evaluateCatalogueReadiness(
     distribution,
     diversity,
     counts: {
-      openCurrent: published.filter((row) => row.state === "open" && !opportunityPublicationFailures(row, now).length).length,
+      openCurrent: published.filter((row) => row.state === "open" && !opportunityPublicationFailures(row, now, sourceAttestations).length).length,
       unclassified: opportunities.filter((row) => row.sector === "unclassified").length,
       missingOrExpiredVerification: reasonText.filter((reason) => reason.includes("verification") || reason.includes("freshness")).length,
-      missingOrInvalidSourceApproval: reasonText.filter((reason) => reason.includes("approval")).length,
+      missingOrInvalidSourceAttestation: reasonText.filter((reason) => reason.includes("attested")).length,
       missingAttribution: reasonText.filter((reason) => reason.includes("attribution")).length,
       missingUnsupportedOrConflictingRequirements: reasonText.filter((reason) => reason.startsWith("No reviewed") || reason.startsWith("Requirement")).length,
       pendingRevisions: opportunities.reduce((sum, row) => sum + (row.catalogue_fact_revisions ?? []).filter((item) => item.status === "pending").length, 0),
@@ -229,6 +291,7 @@ export function evaluateCatalogueReadiness(
     blockingRecords,
     nextReviewQueue: queue,
     sourceRuns,
+    promotedPersonaCoverage,
     globalReasons,
   };
 }

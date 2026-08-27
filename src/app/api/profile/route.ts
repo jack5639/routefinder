@@ -28,7 +28,7 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
-  const context = await getMutationApiContext();
+  const context = await getMutationApiContext(request);
 
   if (!context) {
     return apiError("Sign in to save your readiness profile.", 401, "unauthorised");

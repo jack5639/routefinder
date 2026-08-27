@@ -3,11 +3,12 @@ import { NextResponse } from "next/server";
 
 import { apiError, databaseErrorIs, getMutationApiContext } from "@/lib/api-context";
 import { activePlan } from "@/lib/mvp/entitlements";
-import { selectThisWeek, type TaskCandidate } from "@/lib/mvp/tasks";
+import { applySharedOpportunityCounts, selectThisWeek, type TaskCandidate } from "@/lib/mvp/tasks";
 import { assessOpportunityRequirements } from "@/lib/mvp/requirement-assessment";
 import { candidatesForOpportunity } from "@/lib/mvp/weekly-candidates";
 import type { Opportunity, Qualification, Requirement } from "@/lib/mvp/types";
 import { publicOpportunityWithRequirements } from "@/lib/supabase/public-catalogue";
+import { launchApplicationCycle } from "@/lib/catalog/commercial/policy";
 
 type Row = Record<string, unknown>;
 
@@ -18,14 +19,14 @@ function opportunityFromRow(row: Row): Opportunity {
   };
 }
 
-export async function POST() {
-  const context = await getMutationApiContext();
+export async function POST(request: Request) {
+  const context = await getMutationApiContext(request);
   if (!context) return apiError("Sign in to refresh this week.", 401, "unauthorised");
 
   const [entitlementResult, latestResult, profileResult, qualificationsResult, portfolioResult, linksResult, evidenceResult] = await Promise.all([
     context.supabase.from("entitlements").select("plan,status,ends_at").eq("user_id", context.user.id).maybeSingle(),
     context.supabase.from("plan_refreshes").select("refreshed_at").eq("user_id", context.user.id).order("refreshed_at", { ascending: false }).limit(1).maybeSingle(),
-    context.supabase.from("profiles").select("qualifications_complete").eq("id", context.user.id).maybeSingle(),
+    context.supabase.from("profiles").select("qualifications_complete,application_cycle").eq("id", context.user.id).maybeSingle(),
     context.supabase.from("qualifications").select("id,qualification_type,subject,grade,status").eq("user_id", context.user.id),
     context.supabase
       .from("portfolio_items")
@@ -47,7 +48,7 @@ export async function POST() {
       return apiError("Free includes one refreshed weekly plan each calendar month.", 403, "refresh-limit");
     }
   }
-  if (!profileResult.data) return apiError("Complete your readiness check first.", 409, "profile-required");
+  if (!profileResult.data || profileResult.data.application_cycle !== launchApplicationCycle) return apiError(`Complete the ${launchApplicationCycle} readiness check first.`, 409, "profile-required");
   if (qualificationsResult.error || portfolioResult.error || linksResult.error || evidenceResult.error) return apiError("A weekly plan could not be created.", 503, "unavailable");
 
   const archivedEvidenceIds = new Set((evidenceResult.data ?? []).filter((item) => item.archived).map((item) => item.id));
@@ -62,16 +63,19 @@ export async function POST() {
     candidates.push(...candidatesForOpportunity(item.id, opportunity, assessOpportunityRequirements(opportunity, qualifications, profileResult.data.qualifications_complete ?? false, links), { stage: application?.stage, deadline: application?.deadline ?? undefined, nextAction: application?.next_action }));
   }
   if (!candidates.length) return apiError("Add a reviewed opportunity with requirements before refreshing this week.", 409, "portfolio-required");
-  const selected = selectThisWeek(candidates);
-  const inputHash = createHash("sha256").update(JSON.stringify(candidates)).digest("hex");
+  const countedCandidates = applySharedOpportunityCounts(candidates);
+  const selected = selectThisWeek(countedCandidates);
+  const inputHash = createHash("sha256").update(JSON.stringify(countedCandidates)).digest("hex");
   const { data: tasks, error } = await context.admin.rpc("replace_weekly_plan", {
     p_user_id: context.user.id,
     p_input_hash: inputHash,
     p_tasks: selected.map((candidate) => ({
-      portfolio_item_id: candidate.id.split(":")[0],
+      portfolio_item_id: candidate.portfolioItemId,
       requirement_id: candidate.requirement?.id,
       title: candidate.title,
-      why_it_matters: candidate.whyItMatters,
+      why_it_matters: candidate.sharedOpportunityCount && candidate.sharedOpportunityCount > 1
+        ? `${candidate.whyItMatters} This gap is shared by ${candidate.sharedOpportunityCount} saved opportunities.`
+        : candidate.whyItMatters,
       effort_minutes: candidate.effortMinutes,
       due_date: candidate.dueDate?.slice(0, 10),
     })),

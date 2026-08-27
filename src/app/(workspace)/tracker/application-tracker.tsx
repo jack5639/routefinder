@@ -3,8 +3,9 @@
 import { FormEvent, useEffect, useState } from "react";
 
 const stages = ["planned", "preparing", "submitted", "online-assessment", "interview", "assessment-centre", "decision", "offer", "declined", "withdrawn"];
-type App = { id: string; stage: string; deadline?: string; official_url: string; next_action?: string; note?: string; portfolio_items?: { external_title?: string; opportunities?: { title: string; provider_name: string; state: string } } };
-type Portfolio = { id: string; external_title?: string; external_url?: string; opportunities?: { title: string; application_url: string } };
+type Snapshot = { title?: string; providerName?: string; applicationUrl?: string; state?: string };
+type App = { id: string; stage: string; deadline?: string; official_url: string; next_action?: string; note?: string; portfolio_items?: { external_title?: string; opportunity_snapshot?: Snapshot; opportunities?: { title: string; provider_name: string; state: string } } };
+type Portfolio = { id: string; external_title?: string; external_url?: string; opportunity_snapshot?: Snapshot; opportunities?: { title: string; application_url: string } };
 
 export function ApplicationTracker() {
   const [applications, setApplications] = useState<App[]>([]);
@@ -24,7 +25,7 @@ export function ApplicationTracker() {
     const item = portfolio.find((candidate) => candidate.id === form.get("portfolioItemId"));
     const response = await fetch("/api/applications", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
       portfolioItemId: form.get("portfolioItemId"), stage: "planned", deadline: form.get("deadline") ? new Date(String(form.get("deadline"))).toISOString() : undefined,
-      officialUrl: form.get("officialUrl") || item?.opportunities?.application_url || item?.external_url, nextAction: form.get("nextAction") || undefined,
+      officialUrl: form.get("officialUrl") || item?.opportunities?.application_url || item?.opportunity_snapshot?.applicationUrl || item?.external_url, nextAction: form.get("nextAction") || undefined,
     }) });
     const result = await response.json().catch(() => ({})); setMessage(response.ok ? "Application added." : result.error?.message ?? "Application could not be added.");
     if (response.ok) { event.currentTarget.reset(); await load(); }
@@ -54,7 +55,7 @@ export function ApplicationTracker() {
     <>
       {message && <p role="status" className="mb-5 rounded-2xl bg-sky p-4 font-bold">{message}</p>}
       <form onSubmit={add} className="grid gap-3 rounded-[2rem] bg-white p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-4 sm:p-7">
-        <label className="font-black">Saved opportunity<select required name="portfolioItemId" className="mt-2 min-h-12 w-full rounded-2xl border border-ink/12 bg-white px-4 font-semibold"><option value="">Choose</option>{portfolio.map((item) => <option key={item.id} value={item.id}>{item.opportunities?.title ?? item.external_title}</option>)}</select></label>
+        <label className="font-black">Saved opportunity<select required name="portfolioItemId" className="mt-2 min-h-12 w-full rounded-2xl border border-ink/12 bg-white px-4 font-semibold"><option value="">Choose</option>{portfolio.map((item) => <option key={item.id} value={item.id}>{item.opportunities?.title ?? item.opportunity_snapshot?.title ?? item.external_title}</option>)}</select></label>
         <label className="font-black">Deadline<input type="datetime-local" name="deadline" className="mt-2 min-h-12 w-full rounded-2xl border border-ink/12 px-4 font-semibold" /></label>
         <label className="font-black">Official destination<input required type="url" name="officialUrl" placeholder="https://…" className="mt-2 min-h-12 w-full rounded-2xl border border-ink/12 px-4 font-semibold" /></label>
         <label className="font-black">Next action<input name="nextAction" placeholder="What happens next?" className="mt-2 min-h-12 w-full rounded-2xl border border-ink/12 px-4 font-semibold" /></label>
@@ -62,12 +63,17 @@ export function ApplicationTracker() {
       </form>
       <div className="mt-7 grid gap-4 lg:grid-cols-2">
         {applications.map((application) => {
-          const title = application.portfolio_items?.opportunities?.title ?? application.portfolio_items?.external_title ?? "Application";
+          const liveOpportunity = application.portfolio_items?.opportunities;
+          const snapshot = application.portfolio_items?.opportunity_snapshot;
+          const title = liveOpportunity?.title ?? snapshot?.title ?? application.portfolio_items?.external_title ?? "Application";
+          const provider = liveOpportunity?.provider_name ?? snapshot?.providerName;
+          const usingSavedCopy = Boolean(snapshot && !liveOpportunity);
           const overdue = application.deadline && new Date(application.deadline) < new Date() && !["submitted", "decision", "offer", "declined", "withdrawn"].includes(application.stage);
           return (
             <article key={application.id} className="rounded-[2rem] bg-white p-6 shadow-sm">
-              <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-wide text-leaf">Application</p><h2 className="mt-2 text-2xl font-black">{title}</h2></div>{overdue && <span className="rounded-full bg-coral/15 px-3 py-1 text-xs font-black">Deadline passed</span>}</div>
-              {application.portfolio_items?.opportunities?.state === "closed" && <p className="mt-4 rounded-xl bg-coral/10 p-3 text-sm font-bold">The source opportunity is recorded as closed. Check directly.</p>}
+              <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-wide text-leaf">Application</p><h2 className="mt-2 text-2xl font-black">{title}</h2>{provider && <p className="mt-1 text-sm font-bold text-ink/55">{provider}</p>}</div>{overdue && <span className="rounded-full bg-coral/15 px-3 py-1 text-xs font-black">Deadline passed</span>}</div>
+              {usingSavedCopy && <p className="mt-4 rounded-xl bg-sun/20 p-3 text-sm font-bold">This is the copy you saved. The live catalogue record is no longer available, so check the official destination before relying on details or applying.</p>}
+              {(liveOpportunity?.state === "closed" || snapshot?.state === "closed") && <p className="mt-4 rounded-xl bg-coral/10 p-3 text-sm font-bold">The source opportunity is recorded as closed. Check directly.</p>}
               <label className="mt-5 block text-sm font-black">Current stage<select value={application.stage} onChange={(event) => void stage(application.id, event.target.value)} className="mt-2 min-h-12 w-full rounded-2xl border border-ink/12 bg-white px-4 font-semibold capitalize">{stages.map((value) => <option key={value} value={value}>{value.replaceAll("-", " ")}</option>)}</select></label>
               <div className="mt-5 flex items-center justify-between gap-3 text-sm"><span className="font-bold text-ink/55">{application.deadline ? new Date(application.deadline).toLocaleString("en-GB") : "No deadline recorded"}</span><a href={application.official_url} target="_blank" rel="noreferrer" className="font-black text-leaf">Official destination ↗</a></div>
               <details className="mt-4 rounded-2xl border border-ink/10 p-4">

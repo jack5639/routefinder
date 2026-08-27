@@ -13,6 +13,7 @@ const base = (overrides: Partial<ReadinessOpportunity> = {}): ReadinessOpportuni
   source_url: "https://provider.example/course",
   source_authority: "provider-manual-review",
   source_id: "course-1",
+  application_cycle: 2027,
   deadline: "2027-01-01T00:00:00.000Z",
   verified_at: "2026-07-29T00:00:00.000Z",
   freshness: "high",
@@ -36,10 +37,9 @@ const base = (overrides: Partial<ReadinessOpportunity> = {}): ReadinessOpportuni
 });
 
 describe("commercial catalogue readiness", () => {
-  it("fails closed for approvals, attribution, expired verification and unresolved review work", () => {
+  it("fails closed for a missing source attestation, attribution, expired verification and unresolved review work", () => {
     const failures = opportunityPublicationFailures(base({
       source_authority: "discover-uni-hesa",
-      source_approval_reference: null,
       attribution: null,
       verified_at: "2026-06-01T00:00:00.000Z",
       freshness_expires_at: "2026-07-01T00:00:00.000Z",
@@ -48,11 +48,18 @@ describe("commercial catalogue readiness", () => {
     }), now);
     expect(failures).toEqual(expect.arrayContaining([
       expect.stringContaining("older than 30 days"),
-      expect.stringContaining("approval"),
+      expect.stringContaining("attested"),
       expect.stringContaining("attribution"),
       expect.stringContaining("revision"),
       expect.stringContaining("source issue"),
     ]));
+  });
+
+  it("allows an official source after an active admin attestation without a written reference", () => {
+    const failures = opportunityPublicationFailures(base({ source_authority: "discover-uni-hesa", attribution: {
+      credit: "HESA, www.hesa.ac.uk", licence: "https://creativecommons.org/licenses/by/4.0/", changes: "Selected launch-scope fields.",
+    } }), now, [{ source_authority: "discover-uni-hesa", attested_at: "2026-07-30T10:00:00.000Z" }]);
+    expect(failures).not.toContain("Source permission has not been attested by an administrator.");
   });
 
   it("rejects closed, past-deadline, conflicting and unsupported hard-requirement records", () => {
@@ -67,6 +74,12 @@ describe("commercial catalogue readiness", () => {
       expect.stringContaining("conflicting"),
       expect.stringContaining("unsupported deterministic rule"),
     ]));
+  });
+
+  it("requires university records to be explicitly verified for the launch application cycle", () => {
+    expect(opportunityPublicationFailures(base({ application_cycle: 2026 }), now)).toContain(
+      "University course is not verified for the 2027 application cycle.",
+    );
   });
 
   it("requires all eight cells, both route totals and provider diversity", () => {
@@ -90,6 +103,7 @@ describe("commercial catalogue readiness", () => {
     expect(report.published).toBe(80);
     expect(report.distribution.every((cell) => cell.count === 10)).toBe(true);
     expect(report.routeTotals).toEqual({ "university-course": 40, "apprenticeship-vacancy": 40 });
+    expect(report.promotedPersonaCoverage.every((persona) => persona.passes)).toBe(true);
     expect(report.ready).toBe(true);
   });
 
@@ -100,5 +114,19 @@ describe("commercial catalogue readiness", () => {
     ], [], now);
     expect(report.counts.duplicateOfficialDestinations).toBe(1);
     expect(report.counts.duplicateSourceIds).toBe(1);
+  });
+
+  it("reports unpublished candidate supply for each launch cell", () => {
+    const report = evaluateCatalogueReadiness([
+      base({ id: "draft-a", publication_state: "draft", provider_name: "Provider A" }),
+      base({ id: "draft-b", publication_state: "review", provider_name: "Provider B" }),
+      base({ id: "withdrawn", publication_state: "withdrawn", provider_name: "Provider C" }),
+    ], [], now);
+    expect(report.distribution.find((cell) => cell.sector === "technology" && cell.kind === "university-course")).toMatchObject({
+      count: 0,
+      shortfall: 10,
+      candidates: 2,
+      distinctCandidateProviders: 2,
+    });
   });
 });

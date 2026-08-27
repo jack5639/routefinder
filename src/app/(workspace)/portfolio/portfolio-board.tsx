@@ -17,6 +17,7 @@ type Item = {
   providerName?: string;
   externalUrl?: string;
   needsChecking: boolean;
+  savedStatus?: { code: string; message: string; doNotApply: boolean };
   assessment: null | {
     eligibility: View;
     fit: View;
@@ -94,19 +95,20 @@ export function PortfolioBoard() {
           <article key={item.id} className="rounded-[2rem] bg-white p-5 shadow-sm sm:p-7">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.14em] text-leaf">{item.needsChecking ? "External · needs checking" : "Reviewed catalogue"}</p>
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-leaf">{item.savedStatus?.code === "external" ? "External · needs checking" : item.needsChecking ? "Saved reviewed record · needs checking" : "Reviewed catalogue"}</p>
                 <h2 className="mt-2 text-2xl font-black">{item.title}</h2>
                 {item.providerName && <p className="mt-1 font-semibold text-ink/55">{item.providerName}</p>}
               </div>
               <button onClick={() => void remove(item.id)} className="self-start rounded-full px-4 py-2 text-sm font-black text-ink/50 hover:bg-coral/10">Remove</button>
             </div>
             {item.needsChecking ? (
-              <div className="mt-5 rounded-2xl bg-oat p-5">
-                <p className="font-black">No requirements have been inferred.</p>
-                <p className="mt-2 text-sm font-semibold leading-6 text-ink/60">Open the official page and confirm requirements, dates, and application destination directly.</p>
-                {item.externalUrl && <a href={item.externalUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex font-black text-leaf">Open external page ↗</a>}
+              <div className={`mt-5 rounded-2xl p-5 ${item.savedStatus?.doNotApply ? "border-2 border-coral/30 bg-coral/10" : "bg-oat"}`}>
+                <p className="font-black">{item.savedStatus?.doNotApply ? "Do not rely on this saved record to apply." : "No requirements have been inferred."}</p>
+                <p className="mt-2 text-sm font-semibold leading-6 text-ink/60">{item.savedStatus?.message ?? "Open the official page and confirm requirements, dates, and application destination directly."}</p>
+                {item.externalUrl && <a href={item.externalUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex min-h-11 items-center font-black text-leaf underline">Check the current source ↗</a>}
               </div>
-            ) : item.assessment ? (
+            ) : null}
+            {item.assessment ? (
               <div className="mt-5 grid gap-3 md:grid-cols-5">
                 {viewLabels.map(([key, label]) => {
                   const view = item.assessment?.[key];
@@ -116,6 +118,7 @@ export function PortfolioBoard() {
                       <h3 className="text-xs font-black uppercase tracking-wide text-ink/50">{label}</h3>
                       <p className="mt-2 font-black capitalize text-leaf">{readable(view.state)}</p>
                       <p className="mt-2 text-xs font-semibold leading-5 text-ink/60">{view.reasons[0] ?? view.risks[0] ?? view.missingInformation[0] ?? view.directCheckAction}</p>
+                      {key === "fit" && view.unassessedPreferences.length > 0 ? <p className="mt-2 rounded-lg bg-coral/10 p-2 text-xs font-black leading-5 text-ink/75">Limited view: {view.evaluatedPreferences.length} preference areas assessed; {view.unassessedPreferences.length} not assessed yet.</p> : null}
                       {(view.evaluatedPreferences.length > 0 || view.unassessedPreferences.length > 0 || view.risks.length > 0 || view.missingInformation.length > 0) && (
                         <details className="mt-3 text-xs font-semibold leading-5 text-ink/60">
                           <summary className="cursor-pointer font-black text-leaf focus:outline-none focus:ring-4 focus:ring-leaf/20">View assessment details</summary>

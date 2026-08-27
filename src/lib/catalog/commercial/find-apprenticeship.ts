@@ -6,18 +6,35 @@ const vacancySchema = z.object({
   employerName: z.string().trim().min(1).max(300).default("Employer not supplied"),
   description: z.string().trim().max(10_000).default("Open apprenticeship vacancy."),
   closingDate: z.string().max(100).optional(),
-  vacancyUrl: z.string().url().optional(),
-  applicationUrl: z.string().url().optional(),
+  vacancyUrl: z.string().max(2_000).nullish().transform((value) => value?.trim() || undefined),
+  applicationUrl: z.string().max(2_000).nullish().transform((value) => value?.trim() || undefined),
   postedDate: z.string().optional(),
   addresses: z.array(z.object({
     addressLine1: z.string().optional(),
+    addressLine2: z.string().optional(),
+    addressLine3: z.string().optional(),
+    addressLine4: z.string().optional(),
     town: z.string().optional(),
     county: z.string().optional(),
     postcode: z.string().optional(),
   })).optional(),
-  address: z.object({ addressLine1: z.string().optional(), town: z.string().optional(), county: z.string().optional() }).optional(),
+  address: z.object({
+    addressLine1: z.string().optional(),
+    addressLine2: z.string().optional(),
+    addressLine3: z.string().optional(),
+    addressLine4: z.string().optional(),
+    town: z.string().optional(),
+    county: z.string().optional(),
+    postcode: z.string().optional(),
+  }).optional(),
+  isNationalVacancy: z.boolean().optional(),
   route: z.string().max(300).optional(),
-  course: z.object({ title: z.string().max(300).optional() }).optional(),
+  course: z.object({
+    title: z.string().max(300).optional(),
+    route: z.string().max(300).optional(),
+    type: z.string().max(100).optional(),
+    level: z.number().int().nonnegative().optional(),
+  }).optional(),
 }).passthrough();
 
 const responseSchema = z.object({
@@ -57,6 +74,38 @@ export interface ApprenticeshipDraft {
   rawSnapshot: unknown;
 }
 
+export const displayVacancyApiUrl = "https://api.apprenticeships.education.gov.uk/vacancies/vacancy";
+
+function locationFor(vacancy: z.output<typeof vacancySchema>) {
+  if (vacancy.isNationalVacancy) return "Recruiting nationally";
+  const address = vacancy.addresses?.[0] ?? vacancy.address;
+  if (!address) return "Location on official listing";
+  const parts = [
+    address.town,
+    address.county,
+    address.addressLine2,
+    address.addressLine3,
+    address.addressLine4,
+    address.postcode,
+  ].filter((part): part is string => Boolean(part?.trim()));
+  return [...new Set(parts)].join(", ") || address.addressLine1 || "Location on official listing";
+}
+
+function officialVacancyUrl(reference: string) {
+  const normalized = reference.toUpperCase().startsWith("VAC") ? reference : `VAC${reference}`;
+  return `https://www.findapprenticeship.service.gov.uk/apprenticeship/${normalized}`;
+}
+
+function validHttpUrl(value: string | undefined) {
+  if (!value) return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function fetchApprenticeshipDrafts(apiKey: string, options: { maxPages?: number; fetcher?: typeof fetch } = {}): Promise<{ drafts: ApprenticeshipDraft[]; complete: boolean }> {
   const fetcher = options.fetcher ?? fetch;
   const maxPages = options.maxPages ?? 100;
@@ -64,49 +113,83 @@ export async function fetchApprenticeshipDrafts(apiKey: string, options: { maxPa
   let page = 1;
   let complete = false;
   while (page <= maxPages) {
-  const sourceUrl = new URL("https://api.apprenticeships.education.gov.uk/vacancies");
-  sourceUrl.searchParams.set("PageNumber", String(page));
-  sourceUrl.searchParams.set("PageSize", "100");
-  let response: Response | undefined;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const sourceUrl = new URL(displayVacancyApiUrl);
+    sourceUrl.searchParams.set("PageNumber", String(page));
+    sourceUrl.searchParams.set("PageSize", "100");
+    sourceUrl.searchParams.set("IncludeDetails", "true");
+    let response: Response | undefined;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const candidate = await fetcher(sourceUrl, {
+          headers: {
+            Accept: "application/json",
+            "Ocp-Apim-Subscription-Key": apiKey,
+            "X-Version": "2",
+          },
+          signal: AbortSignal.timeout(20_000),
+        });
+        if (candidate.ok || ![429, 500, 502, 503, 504].includes(candidate.status) || attempt === 2) {
+          response = candidate;
+          break;
+        }
+      } catch {
+        if (attempt === 2) throw new Error("display-api-fetch-failed");
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+    }
+    if (!response) throw new Error("display-api-no-response");
+    if (!response.ok) throw new Error(`display-api-${response.status}`);
+    if (response.headers.get("content-type")?.toLowerCase().includes("text/html")) {
+      throw new Error("display-api-unexpected-content-type");
+    }
+    let body: unknown;
     try {
-      const candidate = await fetcher(sourceUrl, { headers: { "Ocp-Apim-Subscription-Key": apiKey, "X-Version": "2" }, signal: AbortSignal.timeout(20_000) });
-      if (candidate.ok || ![429, 500, 502, 503, 504].includes(candidate.status) || attempt === 2) { response = candidate; break; }
-    } catch { if (attempt === 2) throw new Error("display-api-fetch-failed"); }
-    await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
-  }
-  if (!response) throw new Error("display-api-no-response");
-  if (!response.ok) throw new Error(`display-api-${response.status}`);
-  const parsed = responseSchema.parse(await response.json());
-  const vacancies = parsed.vacancies ?? parsed.items ?? parsed.results ?? [];
-  const retrievedAt = new Date().toISOString();
-  all.push(...vacancies.map((vacancy) => {
-    const address = vacancy.addresses?.[0] ?? vacancy.address;
-    const official = vacancy.vacancyUrl ?? vacancy.applicationUrl ?? `https://www.findapprenticeship.service.gov.uk/apprenticeship/VAC${vacancy.vacancyReference}`;
-    const classification = classifyApprenticeshipSector(`${vacancy.title} ${vacancy.route ?? ""} ${vacancy.course?.title ?? ""}`);
-    return {
-      sourceId: vacancy.vacancyReference,
-      title: vacancy.title,
-      providerName: vacancy.employerName,
-      location: [address?.town, address?.county].filter(Boolean).join(", ") || "Location on official listing",
-      summary: vacancy.description.slice(0, 1200),
-      deadline: vacancy.closingDate,
-      applicationUrl: official,
-      sourceUrl: official,
-      retrievedAt,
-      sector: classification.sector,
-      classificationReason: classification.reason,
-      rawSnapshot: vacancy,
-    };
-  }));
-  const totalPages = parsed.totalPages ?? parsed.pageCount;
-  if (
-    parsed.hasNextPage === false
-    || (totalPages !== undefined && page >= totalPages)
-    || (parsed.totalResults !== undefined && all.length >= parsed.totalResults)
-    || (parsed.hasNextPage === undefined && totalPages === undefined && parsed.totalResults === undefined && vacancies.length < 100)
-  ) { complete = true; break; }
-  page += 1;
+      body = await response.json();
+    } catch {
+      throw new Error("display-api-invalid-json");
+    }
+    const boundary = responseSchema.safeParse(body);
+    if (!boundary.success) {
+      const fields = [...new Set(boundary.error.issues.map((issue) => issue.path.join(".") || "response"))]
+        .slice(0, 5)
+        .join(",");
+      throw new Error(`display-api-invalid-response:${fields}`);
+    }
+    const parsed = boundary.data;
+    const vacancies = parsed.vacancies ?? parsed.items ?? parsed.results ?? [];
+    const retrievedAt = new Date().toISOString();
+    all.push(...vacancies.map((vacancy) => {
+      const canonicalSourceUrl = validHttpUrl(vacancy.vacancyUrl) ?? officialVacancyUrl(vacancy.vacancyReference);
+      const applicationUrl = validHttpUrl(vacancy.applicationUrl) ?? canonicalSourceUrl;
+      const classification = classifyApprenticeshipSector(
+        `${vacancy.title} ${vacancy.route ?? ""} ${vacancy.course?.route ?? ""} ${vacancy.course?.title ?? ""}`,
+      );
+      return {
+        sourceId: vacancy.vacancyReference,
+        title: vacancy.title,
+        providerName: vacancy.employerName,
+        location: locationFor(vacancy),
+        summary: vacancy.description.slice(0, 1200),
+        deadline: vacancy.closingDate,
+        applicationUrl,
+        sourceUrl: canonicalSourceUrl,
+        retrievedAt,
+        sector: classification.sector,
+        classificationReason: classification.reason,
+        rawSnapshot: vacancy,
+      };
+    }));
+    const totalPages = parsed.totalPages ?? parsed.pageCount;
+    if (
+      parsed.hasNextPage === false
+      || (totalPages !== undefined && page >= totalPages)
+      || (parsed.totalResults !== undefined && all.length >= parsed.totalResults)
+      || (parsed.hasNextPage === undefined && totalPages === undefined && parsed.totalResults === undefined && vacancies.length < 100)
+    ) {
+      complete = true;
+      break;
+    }
+    page += 1;
   }
   if (!complete) throw new Error("display-api-incomplete-pagination");
   const bySourceId = new Map<string, ApprenticeshipDraft>();

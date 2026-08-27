@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { isSameOriginRequest } from "@/lib/same-origin";
 import type { RecommendationRequest } from "@/types";
 
 export const runtime = "nodejs";
@@ -15,6 +16,7 @@ function isRecommendationRequest(value: unknown): value is RecommendationRequest
 }
 
 export async function POST(request: NextRequest) {
+  if (!isSameOriginRequest(request)) return NextResponse.json({ error: "Cross-origin requests are not allowed." }, { status: 403 });
   const body = (await request.json()) as unknown;
 
   if (!isRecommendationRequest(body)) {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { apiError, getApiContext, parseJson } from "@/lib/api-context";
+import { isSameOriginRequest } from "@/lib/same-origin";
 import { parseEligibilityRule, serialiseEligibilityRule } from "@/lib/scoring/eligibility-rules";
 import { createAdminClient, isAdminEmail } from "@/lib/supabase/admin";
 
@@ -25,6 +26,12 @@ const bodySchema = z.discriminatedUnion("action", [
     state: z.enum(["open", "closed", "unknown"]),
     freshness: z.enum(["high", "medium", "low", "needs-checking"]),
     note: z.string().trim().min(3).max(1000).default("Opportunity reverified against the recorded primary source."),
+  }),
+  z.object({
+    action: z.literal("verify-opportunity-cycle"),
+    opportunityId: z.string().uuid(),
+    applicationCycle: z.literal(2027),
+    note: z.string().trim().min(3).max(1000),
   }),
   z.object({
     action: z.literal("edit-opportunity"),
@@ -92,6 +99,7 @@ function requirementFact(data: z.infer<typeof requirementFactSchema>) {
 }
 
 export async function POST(request: Request) {
+  if (!isSameOriginRequest(request)) return apiError("Cross-origin requests are not allowed.", 403, "cross-origin");
   const context = await getApiContext();
   if (!context || !isAdminEmail(context.user.email)) return apiError("Admin access required.", 403, "forbidden");
   const parsed = bodySchema.safeParse(await parseJson(request));
@@ -104,6 +112,16 @@ export async function POST(request: Request) {
       p_note: parsed.data.note,
     });
     if (result.error) return apiError("The source issue could not be resolved; nothing was changed.", 409, "mutation-failed");
+    return NextResponse.json({ saved: true });
+  }
+  if (parsed.data.action === "verify-opportunity-cycle") {
+    const result = await admin.rpc("verify_catalogue_opportunity_cycle", {
+      p_opportunity_id: parsed.data.opportunityId,
+      p_reviewer_id: context.user.id,
+      p_application_cycle: parsed.data.applicationCycle,
+      p_note: parsed.data.note,
+    });
+    if (result.error) return apiError("The application cycle could not be verified; nothing was changed.", 409, "mutation-failed");
     return NextResponse.json({ saved: true });
   }
   let rpcAction: string = parsed.data.action;

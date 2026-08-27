@@ -1,11 +1,13 @@
 import { z } from "zod";
 
+import { launchApplicationCycle } from "@/lib/catalog/commercial/policy";
+
 const offerSchema = z.enum(["founding-launch", "standard"]);
 
 export const checkoutMetadataSchema = z.object({
   reservation_id: z.string().uuid(),
   user_id: z.string().uuid(),
-  application_cycle: z.coerce.number().int().min(2026).max(2032),
+  application_cycle: z.coerce.number().int().refine((value) => value === launchApplicationCycle),
   offer: offerSchema,
 });
 

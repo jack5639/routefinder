@@ -41,9 +41,9 @@ export function AccountControls({ currentOffer }: { currentOffer: { offer: Cycle
       <section className="rounded-[2rem] bg-white p-6 shadow-sm">
         <p className="text-xs font-black uppercase tracking-wide text-leaf">Routefinder Cycle</p>
         <h2 className="mt-2 text-2xl font-black">More room for a full application cycle</h2>
-        <p className="mt-3 max-w-2xl font-semibold leading-7 text-ink/60">Unlimited saved opportunities and evidence, up to 15 active applications, complete mappings, and continuous weekly planning. One payment; access ends on 30 September following your entry year.</p>
+        <p className="mt-3 max-w-2xl font-semibold leading-7 text-ink/60">More saved opportunities, unlimited evidence examples, up to 15 active applications, expanded requirements-to-evidence views, and continuous weekly planning. One payment with no renewal; 2027 Cycle access ends on 30 September 2027.</p>
         <button disabled={!currentOffer.checkoutReady} onClick={() => void purchase()} className="mt-5 min-h-12 rounded-full bg-ink px-6 font-black text-white disabled:cursor-not-allowed disabled:opacity-55">{currentOffer.checkoutReady ? `Buy Cycle — ${cyclePriceLabel(currentOffer.amountPence, currentOffer.currency)}` : "Checkout unavailable"}</button>
-        <p className="mt-2 text-xs font-semibold text-ink/50">{currentOffer.offer === "founding-launch" ? "Founding allocation currently available; £59 after it ends." : "The founding allocation has ended."} Checkout confirms the current price before payment.</p>
+        <p className="mt-2 text-xs font-semibold text-ink/50">{currentOffer.offer === "founding-launch" ? "The limited founding allocation is currently available." : "The founding allocation has ended."} £59 is the current standard-price hypothesis. Checkout confirms the authoritative price before payment. Providers and employers decide outcomes; Routefinder does not submit applications.</p>
       </section>
       <section className="rounded-[2rem] bg-white p-6 shadow-sm">
         <h2 className="text-2xl font-black">Your data</h2>

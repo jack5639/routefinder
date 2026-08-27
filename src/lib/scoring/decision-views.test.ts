@@ -300,4 +300,18 @@ describe("commercial decision views", () => {
     ]);
     expect(assessment).not.toHaveProperty("totalScore");
   });
+
+  it("does not let confirmed evidence override a below-minimum hard grade", () => {
+    const assessment = assessOpportunity({
+      profile,
+      qualifications: [{ ...qualifications[0], grade: "C", status: "achieved" }],
+      opportunity,
+      evidenceLinks: [{ requirementId: "requirement-1", coverage: "supported", confirmedByStudent: true }],
+      portfolioSize: 1,
+    });
+
+    expect(assessment.eligibility.state).toBe("appears-unmet");
+    expect(assessment.readiness.state).toBe("urgent-gaps");
+    expect(assessment.readiness.state).not.toBe("well-supported");
+  });
 });

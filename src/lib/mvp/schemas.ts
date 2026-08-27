@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { launchApplicationCycle } from "@/lib/catalog/commercial/policy";
 import { launchSectors } from "@/lib/mvp/types";
 
 export const privacyTermsVersion = "2026-07-29" as const;
@@ -21,7 +22,7 @@ export const qualificationSchema = z.object({
 
 export const profileSchema = z.object({
   currentStage: z.enum(["Year 12", "Year 13"]),
-  applicationCycle: z.number().int().min(2026).max(2032),
+  applicationCycle: z.literal(launchApplicationCycle),
   homeRegion: z.string().trim().min(2).max(100),
   maxTravelMinutes: z.number().int().min(0).max(360),
   relocationPreference: z.enum(["stay-local", "could-relocate", "unsure"]),

@@ -3,7 +3,7 @@ import { evidenceSchema } from "@/lib/mvp/schemas";
 import { z } from "zod";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const context = await getMutationApiContext();
+  const context = await getMutationApiContext(request);
   if (!context) return apiError("Sign in to update evidence.", 401, "unauthorised");
 
   const parsed = evidenceSchema.partial().extend({ archived: z.boolean().optional() }).safeParse(await parseJson(request));
@@ -32,10 +32,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   return error ? apiError("Evidence could not be updated.", 503, "unavailable") : Response.json({ ok: true });
 }
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const context = await getMutationApiContext();
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const context = await getMutationApiContext(request);
   if (!context) return apiError("Sign in to remove evidence.", 401, "unauthorised");
   const { id } = await params;
-  const { error } = await context.admin.from("evidence_items").delete().eq("id", id).eq("user_id", context.user.id);
-  return error ? apiError("Evidence could not be removed.", 503, "unavailable") : Response.json({ ok: true });
+  const { data, error } = await context.admin
+    .from("evidence_items")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", context.user.id)
+    .select("id")
+    .maybeSingle();
+  if (error) return apiError("Evidence could not be removed.", 503, "unavailable");
+  if (!data) return apiError("That evidence item was not found.", 404, "not-found");
+  return Response.json({ ok: true });
 }

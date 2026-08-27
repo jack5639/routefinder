@@ -124,11 +124,11 @@ export function ReadinessForm() {
             <option>Year 12</option><option>Year 13</option>
           </select>
         </label>
-        <label className="font-black">Application cycle
-          <select name="applicationCycle" defaultValue={profile?.application_cycle ?? 2027} className={field}>
-            {[2027, 2028, 2029, 2030, 2031, 2032].map((year) => <option key={year}>{year}</option>)}
-          </select>
-        </label>
+        <div className="font-black">
+          <label htmlFor="application-cycle">Application cycle</label>
+          <input id="application-cycle" aria-describedby="application-cycle-help" name="applicationCycle" value="2027" readOnly className={`${field} bg-ink/5`} />
+          <span id="application-cycle-help" className="mt-2 block text-xs font-semibold text-ink/50">The launch workflow and reviewed university catalogue support 2027 entry only.</span>
+        </div>
         <label className="font-black">Broad home area
           <input name="homeRegion" required minLength={2} defaultValue={profile?.home_region ?? ""} placeholder="For example: West Midlands" className={field} />
           <span className="mt-2 block text-xs font-semibold text-ink/50">Do not enter your full address or postcode.</span>

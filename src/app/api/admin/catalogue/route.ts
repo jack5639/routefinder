@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { apiError, getApiContext, parseJson } from "@/lib/api-context";
+import { isSameOriginRequest } from "@/lib/same-origin";
 import { opportunityPublicationFailures } from "@/lib/catalog/commercial/readiness";
 import { createAdminClient, isAdminEmail } from "@/lib/supabase/admin";
 import { launchSectors } from "@/lib/mvp/types";
@@ -14,6 +15,7 @@ const manualSchema = z.object({
   location: z.string().trim().min(2).max(200),
   summary: z.string().trim().min(10).max(1200),
   deadline: z.string().datetime().optional(),
+  applicationCycle: z.coerce.number().int().refine((value) => value === 2027).optional(),
   applicationUrl: z.string().url(),
   sourceUrl: z.string().url(),
 });
@@ -65,8 +67,8 @@ export async function GET(request: Request) {
   const queueRows = (queue.data ?? []) as Array<{ opportunity_id: string; total_count: number }>;
   const ids = queueRows.map((row) => row.opportunity_id);
   const query = admin.from("opportunities").select(`
-    id,kind,sector,title,provider_name,location,summary,deadline,application_url,source_url,source_authority,source_id,
-    retrieved_at,verified_at,freshness,freshness_expires_at,state,publication_state,source_approval_reference,
+    id,kind,sector,title,provider_name,location,summary,application_cycle,deadline,application_url,source_url,source_authority,source_id,
+    retrieved_at,verified_at,freshness,freshness_expires_at,state,publication_state,
     attribution,last_seen_at,latest_source_change_at,created_at,updated_at,
     requirements(id,kind,label,structured_value,supporting_text,source_url,retrieved_at,verified_at,freshness,freshness_expires_at,conflict,hard_requirement,publication_state,updated_at),
     catalogue_fact_revisions(id,status,field_changes,proposed_fact,reviewer_id,reviewer_note,reviewed_at,created_at),
@@ -74,16 +76,17 @@ export async function GET(request: Request) {
     publication_reviews(id,reviewer_id,decision,note,reviewed_at),
     catalogue_manual_revisions(id,requirement_id,action,reviewer_id,reviewer_note,reviewed_at)
   `).in("id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]);
-  const [opportunities, runs, issues] = await Promise.all([
+  const [opportunities, runs, issues, attestations] = await Promise.all([
     query,
     admin.from("source_runs").select("*").order("started_at", { ascending: false }).limit(20),
     admin.from("source_issues").select("*, opportunities(title)").neq("status", "resolved").order("created_at"),
+    admin.from("catalogue_source_attestations").select("source_authority,attested_at,revoked_at").is("revoked_at", null),
   ]);
-  if (opportunities.error || runs.error || issues.error) return apiError("Admin catalogue unavailable.", 503, "unavailable");
+  if (opportunities.error || runs.error || issues.error || attestations.error) return apiError("Admin catalogue unavailable.", 503, "unavailable");
   const byId = new Map((opportunities.data ?? []).map((item) => [item.id, item]));
   const filtered = ids.flatMap((id) => {
     const item = byId.get(id);
-    return item ? [{ ...item, readinessFailures: opportunityPublicationFailures(item) }] : [];
+    return item ? [{ ...item, readinessFailures: opportunityPublicationFailures(item, new Date(), attestations.data ?? []) }] : [];
   });
   const total = Number(queueRows[0]?.total_count ?? 0);
   return NextResponse.json({
@@ -95,6 +98,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  if (!isSameOriginRequest(request)) return apiError("Cross-origin requests are not allowed.", 403, "cross-origin");
   const context = await adminContext();
   if (!context) return apiError("Admin access required.", 403, "forbidden");
   const parsed = manualSchema.safeParse(await parseJson(request));

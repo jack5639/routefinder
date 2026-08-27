@@ -42,7 +42,7 @@ export default function LandingPage() {
         <div>
           <p className="text-sm font-black uppercase tracking-[0.16em] text-leaf">Application readiness for 2027 entry</p>
           <h1 className="mt-5 max-w-4xl text-5xl font-black leading-[0.98] tracking-[-0.05em] text-ink sm:text-7xl">
-            Know where you stand. See what is missing. Do what matters next.
+            See what each application asks for. See what you can evidence. Know what to do this week.
           </h1>
           <p className="mt-6 max-w-2xl text-lg font-semibold leading-8 text-ink/70">
             Build a balanced shortlist of real university and apprenticeship opportunities, map your genuine evidence to published
@@ -51,10 +51,10 @@ export default function LandingPage() {
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link
-              href="/signin?next=/readiness"
+              href="/start"
               className="inline-flex min-h-14 items-center justify-center rounded-full bg-ink px-7 py-4 text-base font-black text-white shadow-soft transition hover:bg-leaf"
             >
-              Start the free readiness check
+              Get my free first result
             </Link>
             <Link
               href="/how-it-works"
@@ -64,6 +64,9 @@ export default function LandingPage() {
             </Link>
           </div>
           <p className="mt-4 text-sm font-semibold text-ink/55">For students in England exploring technology, engineering, business, or finance.</p>
+          <div className="mt-7 max-w-2xl rounded-2xl border border-white/80 bg-white/65 p-4 text-sm font-semibold leading-6 text-ink/65">
+            <p><strong className="text-ink">Example:</strong> “Show mathematical problem-solving” → your own project evidence → <strong>partly supported</strong> → write down the method you used and check it against the provider’s published wording.</p>
+          </div>
         </div>
 
         <aside className="rounded-[2rem] border border-white/80 bg-white/75 p-5 shadow-soft backdrop-blur sm:p-7">
@@ -115,10 +118,10 @@ export default function LandingPage() {
         </p>
         <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
           <Link
-            href="/signin?next=/readiness"
+            href="/start"
             className="inline-flex min-h-14 items-center justify-center rounded-full bg-leaf px-7 py-4 text-base font-black text-white transition hover:bg-ink"
           >
-            Build your starting strategy
+            Get my free first result
           </Link>
           <Link href="/demo" className="inline-flex min-h-14 items-center justify-center rounded-full px-7 py-4 text-sm font-black text-ink/60 hover:bg-white">
             View the clearly labelled prototype

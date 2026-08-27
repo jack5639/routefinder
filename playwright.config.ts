@@ -3,8 +3,8 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "./e2e",
   testMatch: "public-flow.spec.ts",
-  fullyParallel: true,
-  retries: process.env.CI ? 2 : 0,
+  fullyParallel: false,
+  retries: 0,
   reporter: process.env.CI ? "github" : "list",
   use: {
     baseURL: "http://127.0.0.1:3000",

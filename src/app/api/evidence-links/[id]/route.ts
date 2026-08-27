@@ -3,13 +3,18 @@ import { evidenceLinkSchema } from "@/lib/mvp/schemas";
 import { createHash } from "node:crypto";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const context = await getMutationApiContext();
+  const context = await getMutationApiContext(request);
   if (!context) return apiError("Sign in to update an evidence mapping.", 401, "unauthorised");
   const parsed = evidenceLinkSchema.safeParse(await parseJson(request));
   if (!parsed.success) return apiError("Check the evidence mapping.");
   const { id } = await params;
   const current = await context.admin.from("evidence_requirement_links").select("evidence_id,requirement_id,assessment_version").eq("id", id).eq("user_id", context.user.id).maybeSingle();
   if (!current.data || current.data.evidence_id !== parsed.data.evidenceId || current.data.requirement_id !== parsed.data.requirementId) return apiError("That evidence mapping is unavailable.", 404, "not-found");
+  const requirement = await context.admin.from("requirements").select("hard_requirement,kind").eq("id", current.data.requirement_id).maybeSingle();
+  if (!requirement.data) return apiError("That reviewed requirement is unavailable.", 404, "not-found");
+  if (requirement.data.hard_requirement && requirement.data.kind === "grade") {
+    return apiError("Hard grade requirements are assessed from your qualifications. You can remove this legacy evidence link.", 409, "deterministic-requirement");
+  }
   const assessmentVersion = current.data.assessment_version + 1;
   const { error } = await context.admin.from("evidence_requirement_links").update({ relevance: parsed.data.relevance, coverage: parsed.data.coverage, missing_specificity: parsed.data.missingSpecificity || null, confirmed_by_student: parsed.data.confirmedByStudent, assessment_version: assessmentVersion, updated_at: new Date().toISOString() }).eq("id", id).eq("user_id", context.user.id);
   if (error) return apiError("The evidence mapping could not be updated.", 503, "unavailable");
@@ -17,8 +22,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   return Response.json({ ok: true, assessmentVersion });
 }
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const context = await getMutationApiContext();
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const context = await getMutationApiContext(request);
   if (!context) return apiError("Sign in to unlink evidence.", 401, "unauthorised");
   const { id } = await params;
   const { data, error } = await context.admin

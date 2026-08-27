@@ -1047,7 +1047,10 @@ begin
       when public.rate_limit_buckets.window_started_at
         < pg_catalog.now() - pg_catalog.make_interval(secs => window_seconds)
         then 1
-      else pg_catalog.least(public.rate_limit_buckets.count + 1, maximum + 1)
+      else case
+        when public.rate_limit_buckets.count + 1 > maximum + 1 then maximum + 1
+        else public.rate_limit_buckets.count + 1
+      end
     end,
     window_started_at = case
       when public.rate_limit_buckets.window_started_at

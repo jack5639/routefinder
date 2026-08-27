@@ -3,16 +3,20 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { apiError, parseJson } from "@/lib/api-context";
+import { isSameOriginRequest } from "@/lib/same-origin";
 import { normalisePostLoginPath } from "@/lib/auth/return-path";
+import { campaignCodeSchema, normaliseCampaignCode } from "@/lib/campaign";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 const requestSchema = z.object({
   email: z.string().email().max(320),
   nextPath: z.unknown().optional(),
+  campaign: campaignCodeSchema.optional(),
 });
 
 export async function POST(request: Request) {
+  if (!isSameOriginRequest(request)) return apiError("Cross-origin requests are not allowed.", 403, "cross-origin");
   const parsed = requestSchema.safeParse(await parseJson(request));
   if (!parsed.success) return apiError("Enter a valid email address.");
   const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
@@ -31,9 +35,10 @@ export async function POST(request: Request) {
 
   const supabase = await createClient();
   if (!supabase) return apiError("Account services are not configured in this environment.", 503, "configuration-required");
-  const origin = process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin;
+  const origin = new URL(process.env.NEXT_PUBLIC_APP_URL ?? request.url).origin;
   const nextPath = normalisePostLoginPath(parsed.data.nextPath);
-  const redirectTo = `${origin}/auth/callback?next=${encodeURIComponent(nextPath)}`;
+  const campaign = normaliseCampaignCode(parsed.data.campaign);
+  const redirectTo = `${origin}/auth/callback?next=${encodeURIComponent(nextPath)}${campaign ? `&campaign=${encodeURIComponent(campaign)}` : ""}`;
   const { error } = await supabase.auth.signInWithOtp({
     email: parsed.data.email,
     options: { emailRedirectTo: redirectTo, shouldCreateUser: true },

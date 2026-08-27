@@ -225,6 +225,44 @@ export function evaluateReadiness(
   return explanation;
 }
 
+/**
+ * Builds the readiness view from the shared authoritative requirement
+ * assessment. Deterministic hard requirements have already been evaluated
+ * from qualifications here, so an evidence link cannot overwrite them.
+ */
+export function evaluateReadinessAssessment(
+  assessment: OpportunityRequirementAssessment,
+): DecisionExplanation<ReadinessState> {
+  const explanation = baseExplanation<ReadinessState>("unknown");
+  const requirements = assessment.requirements;
+  if (!requirements.length) {
+    explanation.missingInformation.push("Reviewed requirements are needed before preparation can be assessed.");
+    return explanation;
+  }
+
+  const stateCount = (state: (typeof requirements)[number]["state"]) => requirements.filter((item) => item.state === state).length;
+  const supported = stateCount("supported");
+  const predicted = stateCount("predicted");
+  const incomplete = requirements.length - supported;
+
+  if (stateCount("apparently-unmet") > 0) {
+    explanation.state = "urgent-gaps";
+    explanation.risks.push("A deterministic hard requirement currently appears unmet from the recorded qualifications.");
+  } else if (supported === requirements.length) {
+    explanation.state = "well-supported";
+    explanation.reasons.push("Every reviewed requirement is currently supported by the appropriate qualification or student-confirmed evidence.");
+  } else if (supported > 0 || predicted > 0 || stateCount("weak") > 0) {
+    explanation.state = "partly-supported";
+    if (supported) explanation.reasons.push(`${supported} requirement${supported === 1 ? " is" : "s are"} currently supported.`);
+    if (predicted) explanation.missingInformation.push(`${predicted} hard requirement${predicted === 1 ? " relies" : "s rely"} on a predicted result and still needs confirmation.`);
+    if (incomplete - predicted > 0) explanation.missingInformation.push(`${incomplete - predicted} requirement${incomplete - predicted === 1 ? " needs" : "s need"} more evidence or checking.`);
+  } else {
+    explanation.state = "early-stage";
+    explanation.missingInformation.push("The reviewed requirements still need evidence, qualification details, or direct confirmation.");
+  }
+  return explanation;
+}
+
 export function evaluateInformationConfidence(opportunity: Opportunity): DecisionExplanation<FactConfidence> {
   const explanation = baseExplanation<FactConfidence>(opportunity.freshness);
   const published = opportunity.requirements.filter((requirement) => requirement.publicationState === "published");
@@ -283,7 +321,7 @@ export function assessOpportunity(input: AssessmentInput): OpportunityAssessment
   );
   const eligibility = requirementAssessment.eligibility;
   const fit = evaluateFit(input.profile, input.opportunity);
-  const readiness = evaluateReadiness(input.opportunity.requirements, input.evidenceLinks);
+  const readiness = evaluateReadinessAssessment(requirementAssessment);
   const informationConfidence = evaluateInformationConfidence(input.opportunity);
   const portfolioRole = evaluatePortfolioRole(
     eligibility.state,

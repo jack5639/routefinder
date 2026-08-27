@@ -6,6 +6,7 @@ const packageRunner = process.env.npm_execpath;
 if (!packageRunner) throw new Error("Run release verification through pnpm.");
 
 const normalSuites = [
+  ["production-audit", ["audit:prod"]],
   ["unit", ["test"]],
   ["lint", ["lint"]],
   ["typecheck", ["typecheck"]],

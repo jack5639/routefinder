@@ -1,6 +1,6 @@
 import "server-only";
 
-import { fetchApprenticeshipDrafts, type ApprenticeshipDraft } from "@/lib/catalog/commercial/find-apprenticeship";
+import { displayVacancyApiUrl, fetchApprenticeshipDrafts, type ApprenticeshipDraft } from "@/lib/catalog/commercial/find-apprenticeship";
 import { fetchDiscoverUniDataset, type DiscoverUniCourseDraft, type DiscoverUniSnapshot } from "@/lib/catalog/commercial/discover-uni";
 import { freshnessExpiry, hashSnapshot } from "@/lib/catalog/commercial/revisions";
 import { logServerEvent } from "@/lib/logging";
@@ -10,10 +10,6 @@ type Admin = ReturnType<typeof createAdminClient>;
 type Imported = (ApprenticeshipDraft | (DiscoverUniCourseDraft & { summary: string; sourceUrl: string; retrievedAt: string; rawSnapshot: unknown }))
   & { kind: "apprenticeship-vacancy" | "university-course"; sourceAuthority: "find-an-apprenticeship-api-v2" | "discover-uni-hesa" };
 const BATCH_SIZE = 100;
-
-const approvalFor = (source: string) => source === "find-an-apprenticeship-api-v2"
-  ? process.env.APPRENTICESHIP_SOURCE_APPROVAL_REFERENCE
-  : process.env.DISCOVER_UNI_SOURCE_APPROVAL_REFERENCE;
 
 async function alert(event: string, detail: Record<string, unknown>) {
   logServerEvent("error", event, detail);
@@ -37,7 +33,7 @@ function normalizedFact(draft: Imported) {
   };
 }
 
-async function ingestBatches(admin: Admin, runId: string, drafts: Imported[], sourceUrl: string, approvalReference: string, snapshot?: DiscoverUniSnapshot) {
+async function ingestBatches(admin: Admin, runId: string, drafts: Imported[], sourceUrl: string, snapshot?: DiscoverUniSnapshot) {
   let changed = 0;
   let created = 0;
   for (let offset = 0; offset < drafts.length; offset += BATCH_SIZE) {
@@ -57,10 +53,12 @@ async function ingestBatches(admin: Admin, runId: string, drafts: Imported[], so
       p_source_run_id: runId,
       p_source_authority: drafts[offset].sourceAuthority,
       p_source_url: sourceUrl,
-      p_source_approval_reference: approvalReference,
+      // Retained for backwards-compatible RPC input only. Publication checks the
+      // separate, auditable source attestation instead of a free-text reference.
+      p_source_approval_reference: "",
       p_items: items,
     });
-    if (result.error) throw new Error("catalogue-batch-ingest-failed");
+    if (result.error) throw new Error(`catalogue-batch-ingest-failed:${result.error.code ?? "unknown"}`);
     const summary = result.data as { changed?: number; created?: number } | null;
     changed += summary?.changed ?? 0;
     created += summary?.created ?? 0;
@@ -108,8 +106,7 @@ async function alertBacklog(admin: Admin, source: string, runId: string, changed
 export async function syncApprenticeships() {
   const key = process.env.APPRENTICESHIP_API_KEY;
   if (!key) throw new Error("APPRENTICESHIP_API_KEY is not configured.");
-  if (!approvalFor("find-an-apprenticeship-api-v2")) throw new Error("APPRENTICESHIP_SOURCE_APPROVAL_REFERENCE is required before commercial sync.");
-  const admin = createAdminClient(); const sourceUrl = "https://api.apprenticeships.education.gov.uk/vacancies";
+  const admin = createAdminClient(); const sourceUrl = displayVacancyApiUrl;
   const runId = await beginRun(admin, "find-an-apprenticeship-api-v2", sourceUrl);
   let retrieved = 0;
   let changed = 0;
@@ -117,7 +114,7 @@ export async function syncApprenticeships() {
     const result = await fetchApprenticeshipDrafts(key);
     const drafts: Imported[] = result.drafts.map((draft) => ({ ...draft, kind: "apprenticeship-vacancy", sourceAuthority: "find-an-apprenticeship-api-v2" }));
     retrieved = drafts.length;
-    ({ changed } = await ingestBatches(admin, runId, drafts, sourceUrl, approvalFor("find-an-apprenticeship-api-v2")!));
+    ({ changed } = await ingestBatches(admin, runId, drafts, sourceUrl));
     await finishRun(admin, runId, { status: "completed", complete: result.complete, retrieved, changed, snapshotHash: hashSnapshot(drafts.map((draft) => draft.rawSnapshot)), closeMissing: result.complete });
     if (!result.complete) await alert("catalogue.sync_incomplete", { source: "apprenticeships", runId, retrieved });
     await alertBacklog(admin, "apprenticeships", runId, changed);
@@ -132,8 +129,6 @@ export async function syncApprenticeships() {
 export async function syncDiscoverUni() {
   const sourceUrl = process.env.DISCOVER_UNI_DATASET_URL;
   if (!sourceUrl) throw new Error("DISCOVER_UNI_DATASET_URL is not configured.");
-  const approval = approvalFor("discover-uni-hesa");
-  if (!approval) throw new Error("DISCOVER_UNI_SOURCE_APPROVAL_REFERENCE is required before commercial sync.");
   const admin = createAdminClient();
   const runId = await beginRun(admin, "discover-uni-hesa", sourceUrl);
   let retrieved = 0;
@@ -149,7 +144,7 @@ export async function syncDiscoverUni() {
       retrievedAt: dataset.snapshot.retrievedAt,
     }));
     retrieved = drafts.length;
-    ({ changed } = await ingestBatches(admin, runId, drafts, sourceUrl, approval, dataset.snapshot));
+    ({ changed } = await ingestBatches(admin, runId, drafts, sourceUrl, dataset.snapshot));
     await finishRun(admin, runId, { status: "completed", complete: true, retrieved, changed, snapshotHash: dataset.snapshot.sha256, metadata: dataset.snapshot as unknown as Record<string, unknown>, closeMissing: false });
     await alertBacklog(admin, "discover-uni", runId, changed);
     return { drafted: drafts.length, changed, complete: true, snapshot: dataset.snapshot };
@@ -169,13 +164,16 @@ export async function maintainCommercialCatalogue() {
   }
   const counts = result.data as {
     staleRunsRecovered?: number; expiredOpportunities?: number; expiredRequirements?: number; oldPendingRevisions?: number;
-    staleSources?: string[];
+    closedExpiredDeadlines?: number; staleSources?: string[];
   };
   if ((counts.staleRunsRecovered ?? 0) > 0) await alert("catalogue.stale_runs_recovered", { count: counts.staleRunsRecovered });
   if ((counts.oldPendingRevisions ?? 0) > 0) await alert("catalogue.pending_revision_age", { count: counts.oldPendingRevisions });
   if ((counts.staleSources ?? []).length > 0) await alert("catalogue.source_stale", { sources: counts.staleSources });
   if ((counts.expiredOpportunities ?? 0) + (counts.expiredRequirements ?? 0) > 0) {
     await alert("catalogue.freshness_expired", { opportunities: counts.expiredOpportunities ?? 0, requirements: counts.expiredRequirements ?? 0 });
+  }
+  if ((counts.closedExpiredDeadlines ?? 0) > 0) {
+    await alert("catalogue.expired_deadlines_closed", { count: counts.closedExpiredDeadlines });
   }
   return counts;
 }

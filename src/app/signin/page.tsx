@@ -2,12 +2,14 @@ import Link from "next/link";
 
 import { SignInForm } from "@/app/signin/signin-form";
 import { normalisePostLoginPath } from "@/lib/auth/return-path";
+import { normaliseCampaignCode } from "@/lib/campaign";
 
 export const metadata = { title: "Sign in" };
 
-export default async function SignInPage({ searchParams }: { searchParams: Promise<{ next?: string; error?: string }> }) {
+export default async function SignInPage({ searchParams }: { searchParams: Promise<{ next?: string; error?: string; campaign?: string }> }) {
   const params = await searchParams;
   const nextPath = normalisePostLoginPath(params.next);
+  const campaign = normaliseCampaignCode(params.campaign);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[linear-gradient(145deg,#fbf8ef,#dff3e8,#dceeff)] px-4 py-10">
@@ -24,7 +26,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
             That sign-in link is expired, invalid, or already used. Request a new link below.
           </p>
         )}
-        <SignInForm nextPath={nextPath} />
+        <SignInForm nextPath={nextPath} campaign={campaign} />
         <p className="mt-5 text-xs font-semibold leading-5 text-ink/50">
           By continuing, you agree to the <Link href="/terms" className="underline">terms</Link> and confirm you have read the{" "}
           <Link href="/privacy" className="underline">privacy notice</Link>.

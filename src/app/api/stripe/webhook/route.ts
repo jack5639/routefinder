@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     args = {
       // The signature and explicit environment check above establish this;
       // the RPC receives only the validated-environment marker.
-      p_event_id: event.id, p_event_type: event.type, p_event_created_at: event.created, p_live_mode: true,
+      p_event_id: event.id, p_event_type: event.type, p_event_created_at: event.created, p_live_mode: env.STRIPE_EXPECTED_LIVEMODE === "true",
       p_reservation_id: paid.metadata.reservation_id, p_user_id: paid.metadata.user_id,
       p_application_cycle: paid.metadata.application_cycle, p_offer: paid.metadata.offer,
       p_amount_pence: session.amount_total, p_currency: session.currency?.toLowerCase(),
@@ -71,13 +71,13 @@ export async function POST(request: Request) {
   } else if (event.type === "charge.refunded") {
     const charge = event.data.object as Stripe.Charge;
     args = {
-      p_event_id: event.id, p_event_type: event.type, p_event_created_at: event.created, p_live_mode: true,
+      p_event_id: event.id, p_event_type: event.type, p_event_created_at: event.created, p_live_mode: env.STRIPE_EXPECTED_LIVEMODE === "true",
       p_charge_id: charge.id, p_payment_intent_id: identifier(charge.payment_intent), p_refunded_amount_pence: charge.amount_refunded,
     };
   } else if (event.type === "charge.dispute.created" || event.type === "charge.dispute.closed") {
     const dispute = event.data.object as Stripe.Dispute;
     args = {
-      p_event_id: event.id, p_event_type: event.type, p_event_created_at: event.created, p_live_mode: true,
+      p_event_id: event.id, p_event_type: event.type, p_event_created_at: event.created, p_live_mode: env.STRIPE_EXPECTED_LIVEMODE === "true",
       p_charge_id: identifier(dispute.charge), p_dispute_status: dispute.status,
     };
   } else {

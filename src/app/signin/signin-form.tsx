@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-export function SignInForm({ nextPath }: { nextPath: string }) {
+export function SignInForm({ nextPath, campaign }: { nextPath: string; campaign?: string }) {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -15,7 +15,7 @@ export function SignInForm({ nextPath }: { nextPath: string }) {
     const response = await fetch("/api/auth/magic-link", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, nextPath }),
+      body: JSON.stringify({ email, nextPath, ...(campaign ? { campaign } : {}) }),
     });
     const result = await response.json().catch(() => ({}));
     setMessage(response.ok ? "Check your email for a secure sign-in link." : result.error?.message ?? "A sign-in link could not be sent.");

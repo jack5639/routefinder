@@ -4,7 +4,7 @@ import { apiError, consumeRateLimit, getMutationApiContext, parseJson } from "@/
 import { analyticsSchema } from "@/lib/mvp/schemas";
 
 export async function POST(request: Request) {
-  const context = await getMutationApiContext();
+  const context = await getMutationApiContext(request);
   if (!context) return apiError("Sign in before recording this event.", 401, "unauthorised");
   if (!(await consumeRateLimit(context, "analytics-write", 120, 3600))) {
     return apiError("Too many events were submitted. Try again shortly.", 429, "rate-limited");

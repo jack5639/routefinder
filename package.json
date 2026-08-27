@@ -2,13 +2,16 @@
   "name": "future-route-planner",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "pnpm@11.7.0",
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run",
+    "test": "vitest run --exclude src/app/api/stripe/stripe-staging.integration.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:commercial": "playwright test --config=playwright.commercial.config.ts",
     "test:component": "vitest run src/**/*.component.test.tsx",
@@ -22,13 +25,14 @@
     "data:sync": "node scripts/catalog/run-catalog-command.mjs sync",
     "data:status": "node scripts/catalog/run-catalog-command.mjs status",
     "data:agent": "node scripts/catalog/run-catalog-command.mjs agent",
-    "db:restore-test": "node scripts/verify-backup-restore.mjs"
+    "db:restore-test": "node scripts/verify-backup-restore.mjs",
+    "audit:prod": "pnpm audit --prod --audit-level high"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.9",
     "fflate": "^0.8.3",
-    "next": "^16.2.10",
+    "next": "16.2.12",
     "openai": "^6.45.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
@@ -44,7 +48,7 @@
     "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.5.2",
     "eslint": "^9.0.0",
-    "eslint-config-next": "^16.2.10",
+    "eslint-config-next": "16.2.12",
     "jiti": "^1.21.7",
     "jsdom": "^30.0.0",
     "postcss": "^8.5.16",

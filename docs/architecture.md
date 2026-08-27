@@ -1,6 +1,6 @@
 # Routefinder Architecture
 
-Last reviewed: 30 July 2026
+Last reviewed: 27 August 2026
 
 Status: authoritative technical direction. Current sections describe the repository today; release-gate sections distinguish source-complete work from external production work.
 
@@ -36,7 +36,7 @@ The architecture optimises for:
 
 ```text
 Commercial browser
-  -> Next.js commercial pages and authenticated API routes
+  -> account-free /start first-result paths and authenticated application routes
   -> read-only student Supabase role and server-owned validated mutations
   -> RLS-protected Postgres with database relationship and entitlement enforcement
   -> deterministic five-view assessments and weekly prioritisation
@@ -61,7 +61,7 @@ The commercial implementation now provides the source-code boundary for accounts
 | Scoring | `src/lib/scoring` | Pure deterministic scoring, board construction, feedback, and simulator comparison |
 | Catalogue | `src/lib/catalog` | Source adapters, import, SQLite schema, queries, status, and freshness |
 | Commercial MVP domain | `src/lib/mvp` | Validated schemas, entitlements, payment ordering, task selection, and commercial types |
-| Commercial persistence | `supabase` and authenticated API routes | Postgres migrations, RLS, auth, user data, catalogue publication, payment projection, export, and deletion |
+| Commercial persistence | `supabase`, authenticated API routes, and the deletion-ledger boundary | Postgres migrations, RLS, auth, user data, catalogue publication, payment projection, export, deletion, and restore replay |
 | Commercial official sources | `src/lib/catalog/commercial` | Display Advert API v2 and Discover Uni dataset boundaries |
 | Browser persistence | `src/lib/*-storage.ts` | Normalised local save/load/clear operations and events |
 | Client hooks | `src/lib/use-*` | React access to browser or catalogue state |
@@ -152,6 +152,8 @@ Components should query entitlements through one interface rather than embedding
 
 Receives defined product events with data minimisation. Product analytics must not become an undeclared student-profile store. Sensitive free text and application content should not be copied into analytics events.
 
+The public funnel accepts only bounded starting-path, first-result, and paywall events plus an optional validated campaign code. Authentication attributes that code to a user only after a successful session. Payment completion, refund, and dispute analytics are projected from audited server-side payment state, never browser claims.
+
 ## Commercial data model
 
 The first commercial model needs at least these concepts:
@@ -210,12 +212,15 @@ Browser storage remains acceptable for low-risk prototype state. The local SQLit
 - Readiness replacement, required consent evidence, and its operational audit record commit through one service-only transaction; product analytics remains explicitly best effort.
 - Evidence-link updates and their assessment-version history commit through one service-only transaction.
 - Active catalogue and external portfolio destinations have concurrency-safe uniqueness. A repeated save returns the existing active item.
+- A reviewed portfolio save stores a bounded safe display/provenance snapshot. If public catalogue safety later hides the live relation, the private saved item remains identifiable, is marked do-not-rely-on-to-apply, and links to the source for a current check.
+- Hard grade requirements are assessed only from qualifications. Evidence links cannot satisfy or overwrite them at either the API or database trigger boundary.
 - Database constraints and triggers independently enforce user ownership, cross-object relationships, and concurrency-safe entitlement limits.
 - Database migrations revoke browser-role table and function privileges by default, then grant only explicitly reviewed read access and server RPC execution.
 - Keep database access behind repository or domain interfaces.
 - Treat provider selection as an implementation decision; do not leak provider SDKs through the UI.
 - Use migrations and backups.
 - Define retention and deletion by data category.
+- Write account-deletion replay records through the separately durable, provider-neutral boundary in `src/lib/deletion-ledger.ts`; never treat the restored database as its own deletion ledger. See `adr/003-separately-durable-deletion-ledger.md`.
 - Keep local UI preferences separate from recoverable product data.
 - Do not migrate browser data into an account without an explicit user action and validation.
 
@@ -236,7 +241,7 @@ See `adr/001-local-storage-boundary.md`.
 
 The official Find an Apprenticeship Display Vacancy Advert API is the preferred English vacancy source. Discover Uni/HESA may provide open university data within its licence. Comprehensive UCAS data requires an approved commercial basis.
 
-Commercial sync stores append-only source observations and pending field revisions. External records are validated before ingestion and sent to Postgres in bounded batches of at most 100. One transaction per batch records the organisation, draft or last-seen state, restricted raw observation, hash, classification reason, and revision decision input. It may update a draft candidate, but it never overwrites a published fact: the public record remains authoritative until an authorised reviewer accepts a revision.
+Commercial sync stores append-only source observations and pending field revisions. External records are validated before ingestion and sent to Postgres in bounded batches of at most 100. The Display Advert API v2 adapter calls the documented `/vacancies/vacancy` operation with `X-Version: 2`, complete pagination, and detail inclusion; the API server root is not a vacancy operation. The Discover Uni adapter uses `PUBUKPRN` for the user-facing publication provider, retains `UKPRN:KISCOURSEID` as the source identity, combines the source rows produced for multiple `KISMODE` values without discarding their raw evidence, resolves `COURSELOCATION` through `LOCATION`, and excludes Northern Ireland publication providers from the England/Wales/Scotland launch scope. One transaction per batch records the aligned organisation, draft or last-seen state, restricted raw observation, hash, classification reason, and revision decision input. It may update a draft candidate, but it never overwrites a published fact: the public record remains authoritative until an authorised reviewer accepts a revision.
 
 `source_runs` follow `running -> completed` or `running -> failed`. A source-specific database lock prevents overlap; a run abandoned for 90 minutes is changed to `failed` before a later run may begin. A run is closure-safe only when fetch, pagination, boundary validation, every observation batch, and finalisation all succeed and `complete_snapshot` is true. Only that state may close missing apprenticeship vacancies. Partial, capped, failed, and Discover Uni snapshots never close missing records.
 
@@ -244,9 +249,9 @@ The database keeps at most one pending revision for an opportunity. An identical
 
 The admin review queue reads only safe normalised facts, bounded diffs, review metadata, and readiness failures. Raw source observations remain service-only. Opportunity facts and requirement create, edit, reverify, conflict, resolution, withdrawal, and supersession operations run through one audit-preserving database transaction.
 
-Publication is a service-role-only database transaction attributed to an authenticated allowlisted reviewer. It fails unless the opportunity is open, in a launch sector, recently verified and unexpired, source-approved where required, attributable where derived from Discover Uni, has complete official destinations and source fields, has no passed deadline, pending revision, or unresolved source issue, and has at least one source-backed reviewed requirement. Conflicting or unsupported deterministic hard requirements block publication. The opportunity mutation, publication review, and audit event commit atomically. Withdrawal uses the same reviewed path but intentionally remains available immediately.
+Publication is a service-role-only database transaction attributed to an authenticated allowlisted reviewer. It fails unless the opportunity is open, in a launch sector, recently verified and unexpired, source-approved where required, attributable where derived from Discover Uni, has complete official destinations and source fields, has no passed deadline, pending revision, or unresolved source issue, and has at least one source-backed reviewed requirement. University records must also have a manually verified 2027 application cycle; apprenticeship vacancies are not assigned a university cycle. Conflicting or unsupported deterministic hard requirements block publication. The opportunity mutation, publication review, and audit event commit atomically. Withdrawal uses the same reviewed path but intentionally remains available immediately.
 
-The pure catalogue readiness evaluator is shared by `/api/admin/catalogue/readiness` and the review API. It enforces 80 published records, ten in every sector × route cell, forty per route type, at least ten distinct providers/employers per route type with no provider above 25%, record publication gates, duplicate detection, and recent complete source runs.
+The pure catalogue readiness evaluator is shared by `/api/admin/catalogue/readiness` and the review API. It enforces 80 published records, ten in every sector × route cell, forty per route type, at least ten distinct providers/employers per route type with no provider above 25%, record publication gates, duplicate detection, recent complete source runs, and at least three relevant open, source-backed records for every promoted sector × route persona. The public Supabase policies repeat the critical gates at read time: published, open, future deadline, current freshness, recent verification, no unresolved work, valid reviewed requirements, approved source, current complete source run, and the 2027 university cycle. Scheduled maintenance closes passed-deadline records. Each readiness cell also reports its unpublished candidate supply and candidate-provider count so a reviewer can open the exact shortfall queue without confusing imported volume with reviewed publication coverage.
 
 ## Recommendation boundary
 
@@ -325,18 +330,24 @@ Current variables are listed in `.env.example`. The commercial groups are:
 | `NEXT_PUBLIC_SUPABASE_URL` | Yes | Public Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Public Supabase anonymous key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | Server-only administrative database and auth operations |
+| `PAYMENTS_ENABLED` | Yes; defaults `false` | Explicit checkout switch. Checkout remains closed unless this is `true` and the Stripe environment is complete and internally consistent; signed webhooks remain operational while checkout is closed |
 | `STRIPE_SECRET_KEY` | When payments open | Server-only Stripe API access |
 | `STRIPE_WEBHOOK_SECRET` | When payments open | Stripe webhook signature verification |
 | `STRIPE_EXPECTED_LIVEMODE` | When payments open | Explicitly pins webhook and checkout to Stripe test (`false`) or live (`true`) mode |
 | `PAYMENT_STAGING_*` | Staging integration test only | Isolated staging endpoint, Supabase service role, and Stripe test webhook secret; never production credentials |
+| `PAYMENT_STAGING_CRON_SECRET` | Staging integration test only | Isolated staging cron authorisation for the entitlement-expiry check; never production credentials |
 | `COMMERCIAL_E2E_*` | Authenticated staging browser test only | Isolated project identity, anonymous key, server-only setup key, and exact acknowledgement |
 | `SUPABASE_SECURITY_STAGING_*` | Destructive security test only | Explicit isolated project identity, database connection, sentinel, keys, and exact acknowledgement |
 | `SUPABASE_RESTORE_TEST_*` | Destructive restore test only | Separate disposable restore target identity, API and database access |
+| `CATALOGUE_UNAPPROVED_DRAFT_IMPORT_ACK` | Temporary staging-only catalogue preparation | Exact acknowledgement allowing source observations while an admin permission attestation is pending; it is refused for the configured production project and never relaxes publication or readiness checks |
+| `DELETION_LEDGER_*` | Account deletion and destructive restore test | Server-only HTTPS endpoint and credential for a separately durable deletion ledger |
 | `RELEASE_VERIFY_*` | Strict release operator only | Exact acknowledgement and explicit selection of every external launch suite |
 
 ### Payment projection and retries
 
-Checkout receives a short-lived reservation from the database. That reservation is the sole authority for the offer, GBP amount, application cycle, and access end date; it also atomically allocates the limited founding price and refuses a new checkout while Cycle is active. A signed webhook is accepted only in the configured Stripe environment. A completion must be `complete` and `paid`, carry validated metadata, and match its unconsumed reservation and profile.
+Checkout first requires `PAYMENTS_ENABLED=true` and a complete, matching Stripe test/live configuration. It then receives a short-lived reservation from the database. That reservation is the sole authority for the offer, GBP amount, the supported 2027 application cycle, and the 30 September 2027 access end date; it also atomically allocates the limited founding price and refuses a new checkout while Cycle is active. A signed webhook remains accepted while new checkout is disabled and is accepted only in the configured Stripe environment. A completion must be `complete` and `paid`, carry validated metadata, and match its unconsumed reservation and profile.
+
+`/api/health` is intentionally process liveness only. `/api/readiness` fails closed and returns coarse non-secret checks for canonical HTTPS origin, Supabase connectivity, exact release migration, catalogue gate, separately durable deletion ledger, and payment-switch consistency.
 
 One service-role-only, fixed-`search_path` RPC serialises each Stripe event, updates the entitlement and order, writes the minimal audit/analytics projection, and only then marks the event processed. Any required-write failure rolls back the projection. The handler records a bounded retryable `failed` marker separately and returns a non-2xx response; malformed, unsupported, and environment-mismatched events fail closed without retaining their payload. Duplicate delivery returns successfully without a second projection.
 
@@ -388,6 +399,7 @@ pnpm lint
 pnpm typecheck
 pnpm build
 pnpm docs:check
+pnpm audit:prod
 pnpm test:e2e
 pnpm verify:local
 pnpm release:verify
@@ -395,7 +407,7 @@ pnpm release:verify
 
 ## Remaining production sequence
 
-1. Create and connect separate Vercel preview/production and London Supabase staging/production projects.
+1. Create and connect one Vercel project with Preview and Production environments, plus separate London Supabase staging and production projects.
 2. Apply migrations, configure secrets, and run staging auth, RLS, payment, restore, and cross-user tests.
 3. Import, manually verify, and spot-check the minimum source-backed launch catalogue.
 4. Complete specialist policy, DPIA, safeguarding, retention, accessibility, and threat-model review.

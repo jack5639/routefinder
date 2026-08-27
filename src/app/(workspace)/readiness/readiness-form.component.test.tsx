@@ -43,6 +43,14 @@ describe("ReadinessForm qualification rows", () => {
     expect(body.qualifications).toEqual([expect.objectContaining({ id: qualificationId, status: "achieved", grade: "A" })]);
   });
 
+  it("presents 2027 as the only launch cycle", async () => {
+    await load();
+    const cycle = screen.getByLabelText("Application cycle");
+    expect(cycle).toHaveValue("2027");
+    expect(cycle).toHaveAttribute("readonly");
+    expect(screen.getByText(/support 2027 entry only/i)).toBeVisible();
+  });
+
   it("keeps unknown grades explicit and grade-free", async () => {
     await load();
     const row = screen.getByRole("group", { name: "Qualification 1" });

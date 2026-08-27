@@ -6,6 +6,9 @@ import { buildRequirementGraph } from "@/lib/mvp/evidence-graph";
 import { assessOpportunityRequirements } from "@/lib/mvp/requirement-assessment";
 import { assessOpportunity } from "@/lib/scoring/decision-views";
 import { publicOpportunityWithRequirements } from "@/lib/supabase/public-catalogue";
+import { launchApplicationCycle } from "@/lib/catalog/commercial/policy";
+import { parseOpportunitySnapshot } from "@/lib/mvp/opportunity-snapshot";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 type Row = Record<string, unknown>;
 
@@ -57,7 +60,7 @@ export async function GET() {
     context.supabase
       .from("portfolio_items")
       .select(
-        `id,user_id,opportunity_id,external_title,external_url,active,created_at,updated_at,opportunities(${publicOpportunityWithRequirements}),applications(*)`,
+        `id,user_id,opportunity_id,opportunity_snapshot,external_title,external_url,active,created_at,updated_at,opportunities(${publicOpportunityWithRequirements}),applications(*)`,
       )
       .eq("user_id", context.user.id)
       .eq("active", true),
@@ -65,7 +68,7 @@ export async function GET() {
     context.supabase.from("evidence_items").select("*").eq("user_id", context.user.id),
   ]);
 
-  if (!profileResult.data) return apiError("Complete your readiness check first.", 409, "profile-required");
+  if (!profileResult.data || profileResult.data.application_cycle !== launchApplicationCycle) return apiError(`Complete the ${launchApplicationCycle} readiness check first.`, 409, "profile-required");
   if (qualificationResult.error || portfolioResult.error || linksResult.error || evidenceResult.error) {
     return apiError("Decision views are temporarily unavailable.", 503, "unavailable");
   }
@@ -106,14 +109,34 @@ export async function GET() {
     archived: item.archived,
   }));
   const portfolioSize = portfolioResult.data?.length ?? 0;
+  const hiddenIds = (portfolioResult.data ?? []).flatMap((item) => {
+    const visible = Array.isArray(item.opportunities) ? item.opportunities[0] : item.opportunities;
+    return item.opportunity_id && !visible ? [item.opportunity_id] : [];
+  });
+  const admin = createAdminClient();
+  const hiddenResult = hiddenIds.length
+    ? await admin.from("opportunities").select(publicOpportunityWithRequirements).in("id", hiddenIds)
+    : { data: [], error: null };
+  if (hiddenResult.error) return apiError("Saved opportunity status is temporarily unavailable.", 503, "unavailable");
+  const hiddenById = new Map((hiddenResult.data ?? []).map((row: Row) => [String(row.id), row]));
   const items = (portfolioResult.data ?? []).map((item) => {
-    const opportunityRow = Array.isArray(item.opportunities) ? item.opportunities[0] : item.opportunities;
+    const publicRow = Array.isArray(item.opportunities) ? item.opportunities[0] : item.opportunities;
+    const opportunityRow = publicRow ?? (item.opportunity_id ? hiddenById.get(item.opportunity_id) : null);
+    const snapshot = parseOpportunitySnapshot(item.opportunity_snapshot);
     if (!opportunityRow) {
       return {
         id: item.id,
-        title: item.external_title,
-        externalUrl: item.external_url,
+        title: snapshot?.title ?? item.external_title ?? "Saved opportunity",
+        providerName: snapshot?.providerName,
+        externalUrl: snapshot?.sourceUrl ?? item.external_url,
         needsChecking: true,
+        savedStatus: {
+          code: snapshot ? "catalogue-unavailable" : "external",
+          message: snapshot
+            ? "This saved reviewed record is no longer available in the current catalogue. Do not rely on it to apply; check the official source and choose a current option if needed."
+            : "This external link has not been reviewed by Routefinder. Confirm every material fact directly.",
+          doNotApply: Boolean(snapshot),
+        },
         assessment: null,
         requirements: [],
       };
@@ -138,8 +161,17 @@ export async function GET() {
       id: item.id,
       title: opportunity.title,
       providerName: opportunity.providerName,
-      externalUrl: null,
-      needsChecking: false,
+      externalUrl: opportunity.sourceUrl,
+      needsChecking: !publicRow,
+      savedStatus: publicRow ? {
+        code: "current",
+        message: "This record is currently open, reviewed, and fresh enough for public discovery. Always recheck the official page before applying.",
+        doNotApply: false,
+      } : {
+        code: "catalogue-changed",
+        message: "This saved reviewed record no longer passes the public catalogue safety checks. Do not rely on it to apply; check the official source for closure, deadline, freshness, conflicts, or a pending review.",
+        doNotApply: true,
+      },
       requirements: opportunity.requirements,
       application: item.applications?.[0] ?? null,
       graph: buildRequirementGraph(

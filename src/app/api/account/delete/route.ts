@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 
 import { apiError, getMutationApiContext, parseJson } from "@/lib/api-context";
+import { recordDeletion } from "@/lib/deletion-ledger";
 import { z } from "zod";
 
 const deleteSchema = z.object({ confirmation: z.literal("DELETE") });
 
 export async function POST(request: Request) {
-  const context = await getMutationApiContext();
+  const context = await getMutationApiContext(request);
   if (!context) return apiError("Sign in to delete your account.", 401, "unauthorised");
   const parsed = deleteSchema.safeParse(await parseJson(request));
   if (!parsed.success) return apiError("Type DELETE to confirm account deletion.");
@@ -23,6 +24,15 @@ export async function POST(request: Request) {
   if (audit.error) {
     return apiError("Account deletion is temporarily unavailable. Contact support if this continues.", 503, "unavailable");
   }
+
+  // This must be durably acknowledged outside the database backup boundary
+  // before removing the Auth user. If it is unavailable, deletion fails closed.
+  try {
+    await recordDeletion(context.user.id);
+  } catch {
+    return apiError("Account deletion is temporarily unavailable. Contact support if this continues.", 503, "unavailable");
+  }
+
   await context.admin.from("analytics_events").insert({
     user_id: context.user.id,
     event_name: "deletion_requested",

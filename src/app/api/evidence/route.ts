@@ -26,7 +26,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const context = await getMutationApiContext();
+  const context = await getMutationApiContext(request);
   if (!context) return apiError("Sign in to add evidence.", 401, "unauthorised");
   if (!(await consumeRateLimit(context, "evidence-write", 40, 3600))) {
     return apiError("Too many evidence changes. Try again shortly.", 429, "rate-limited");

@@ -22,7 +22,11 @@ const sentinelMarker = "routefinder-disposable-security-test-v1";
 const expectedMigrations = [
   "202607290001", "202607290002", "202607290003", "202607290004",
   "202607300001", "202607300002", "202607300003", "202607300004",
-  "202607300005",
+  "202607300005", "20260731172503",
+  "20260801215120", "20260801222228", "20260801223008", "20260801225211",
+  "20260801230116", "20260803121300", "20260808152000", "20260808152500",
+  "20260808153500", "20260812120000", "20260812130000",
+  "20260827202316",
 ];
 const required = ["url", "anonKey", "serviceKey", "dbUrl", "projectRef"];
 if (required.some((key) => !env[key]) || env.acknowledgement !== exactAcknowledgement) {
@@ -121,7 +125,7 @@ async function main() {
 
   const triggerCount = sql("select count(*) from pg_trigger where tgname in ('portfolio_item_security','evidence_item_security','evidence_requirement_link_security','task_security','plan_refresh_security','application_security','source_issue_security') and not tgisinternal;");
   assert.equal(triggerCount, "7", "A required relationship or entitlement trigger is missing");
-  const serviceFunctions = ["replace_readiness_profile", "save_readiness_profile", "save_evidence_requirement_link", "replace_weekly_plan", "consume_rate_limit", "reserve_cycle_checkout", "apply_stripe_payment_event", "fail_stripe_payment_event", "begin_catalogue_source_run", "ingest_catalogue_observation_batch", "finish_catalogue_source_run", "review_catalogue_revision", "review_catalogue_publication", "review_catalogue_fact_mutation", "maintain_catalogue_operations", "create_catalogue_manual_draft", "catalogue_review_queue", "resolve_catalogue_source_issue"];
+  const serviceFunctions = ["replace_readiness_profile", "save_readiness_profile", "save_evidence_requirement_link", "replace_weekly_plan", "consume_rate_limit", "reserve_cycle_checkout", "apply_stripe_payment_event", "fail_stripe_payment_event", "begin_catalogue_source_run", "ingest_catalogue_observation_batch", "finish_catalogue_source_run", "review_catalogue_revision", "review_catalogue_publication", "review_catalogue_fact_mutation", "maintain_catalogue_operations", "create_catalogue_manual_draft", "catalogue_review_queue", "resolve_catalogue_source_issue", "verify_catalogue_opportunity_cycle", "routefinder_release_probe"];
   for (const name of serviceFunctions) {
     const browserGrant = sql(`select count(*) from information_schema.routine_privileges where specific_schema='public' and routine_name='${name}' and grantee in ('PUBLIC','anon','authenticated') and privilege_type='EXECUTE';`);
     assert.equal(browserGrant, "0", `${name} is executable by a browser role`);
@@ -130,17 +134,18 @@ async function main() {
   }
 
   const [a, b] = await Promise.all([makeStudent("a"), makeStudent("b")]);
-  await insert("profiles", { id: a.id, application_cycle: new Date().getUTCFullYear() + 1 });
-  const profileB = await insert("profiles", { id: b.id, application_cycle: new Date().getUTCFullYear() + 1 });
+  await insert("profiles", { id: a.id, application_cycle: 2027 });
+  const profileB = await insert("profiles", { id: b.id, application_cycle: 2027 });
   const opportunity = await insert("opportunities", {
-    kind: "external", sector: "technology", title: `Security fixture ${stamp}`, provider_name: "Synthetic test provider",
+    kind: "university-course", sector: "technology", title: `Security fixture ${stamp}`, provider_name: "Synthetic test provider",
     location: "London", summary: "Synthetic security fixture", application_url: "https://example.test/apply",
     source_url: "https://example.test/source", source_authority: `security-${stamp}`, source_id: stamp,
-    retrieved_at: new Date().toISOString(), freshness: "high", state: "open", publication_state: "published",
+    retrieved_at: new Date().toISOString(), verified_at: new Date().toISOString(), freshness_expires_at: new Date(Date.now() + 30 * 86400000).toISOString(),
+    application_cycle: 2027, freshness: "high", state: "open", publication_state: "published",
     raw_snapshot: { restricted: true },
   });
   opportunityId = opportunity.id;
-  const requirement = await insert("requirements", { opportunity_id: opportunity.id, kind: "qualification", label: "Synthetic", supporting_text: "Synthetic", source_url: "https://example.test/source", retrieved_at: new Date().toISOString(), freshness: "high", publication_state: "published" });
+  const requirement = await insert("requirements", { opportunity_id: opportunity.id, kind: "qualification", label: "Synthetic", supporting_text: "Synthetic", source_url: "https://example.test/source", retrieved_at: new Date().toISOString(), verified_at: new Date().toISOString(), freshness_expires_at: new Date(Date.now() + 30 * 86400000).toISOString(), freshness: "high", publication_state: "published" });
   const portfolioA = await insert("portfolio_items", { user_id: a.id, opportunity_id: opportunity.id });
   const portfolioB = await insert("portfolio_items", { user_id: b.id, opportunity_id: opportunity.id });
   const evidenceA = await insert("evidence_items", { user_id: a.id, evidence_type: "activity", happened: "Synthetic A", contribution: "Synthetic A", outcome: "Synthetic A", learned: "Synthetic A" });
@@ -194,6 +199,7 @@ async function main() {
     ["fail_stripe_payment_event", { p_event_id: "evt_x", p_event_type: "x", p_event_created_at: 1, p_error_code: "x" }],
     ["review_catalogue_publication", { p_opportunity_id: opportunity.id, p_reviewer_id: a.id, p_decision: "published", p_note: "forged" }],
     ["maintain_catalogue_operations", {}],
+    ["verify_catalogue_opportunity_cycle", { p_opportunity_id: opportunity.id, p_reviewer_id: a.id, p_application_cycle: 2027, p_note: "forged" }],
   ]) {
     assert.ok((await anon.rpc(name, args)).error, `Anonymous client invoked ${name}`);
     assert.ok((await a.client.rpc(name, args)).error, `Authenticated client invoked ${name}`);

@@ -3,10 +3,17 @@ import { createClient, type Session, type SupabaseClient } from "@supabase/supab
 
 const exactAcknowledgement = "routefinder-isolated-commercial-e2e-v1";
 const sentinelMarker = "routefinder-disposable-security-test-v1";
+const destructiveDeletionAcknowledgement = "routefinder-isolated-commercial-delete-v1";
 
 export interface SyntheticStudent {
   id: string;
   session: Session;
+}
+
+export interface SyntheticReviewedOpportunity {
+  id: string;
+  title: string;
+  requirementId: string;
 }
 
 export class IsolatedCommercialEnvironment {
@@ -14,6 +21,7 @@ export class IsolatedCommercialEnvironment {
   readonly anonKey: string;
   readonly projectRef: string;
   readonly admin: SupabaseClient;
+  readonly destructiveDeletionEnabled: boolean;
   private readonly users = new Set<string>();
   private readonly opportunities = new Set<string>();
 
@@ -23,6 +31,9 @@ export class IsolatedCommercialEnvironment {
     const serviceKey = process.env.COMMERCIAL_E2E_SUPABASE_SERVICE_ROLE_KEY ?? "";
     this.projectRef = process.env.COMMERCIAL_E2E_SUPABASE_PROJECT_REF ?? "";
     const productionRef = process.env.SUPABASE_PRODUCTION_PROJECT_REF;
+    const deletionLedgerUrl = process.env.DELETION_LEDGER_URL?.trim() ?? "";
+    const deletionLedgerToken = process.env.DELETION_LEDGER_BEARER_TOKEN?.trim() ?? "";
+    const deletionAcknowledged = process.env.COMMERCIAL_E2E_DELETION_LEDGER_ACK === destructiveDeletionAcknowledgement;
     if (!this.url || !this.anonKey || !serviceKey || !this.projectRef || process.env.COMMERCIAL_E2E_ACK !== exactAcknowledgement) {
       throw new Error(`Commercial E2E is opt-in. Set every COMMERCIAL_E2E_* value and acknowledge exactly ${exactAcknowledgement}.`);
     }
@@ -33,6 +44,13 @@ export class IsolatedCommercialEnvironment {
     if (process.env.NEXT_PUBLIC_SUPABASE_URL !== this.url || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY !== this.anonKey) {
       throw new Error("The locally started application must use the same isolated Supabase project as commercial E2E.");
     }
+    if ((deletionLedgerUrl || deletionLedgerToken || deletionAcknowledged) && (!deletionLedgerUrl || !deletionLedgerToken || !deletionAcknowledged)) {
+      throw new Error(`Destructive account-deletion E2E requires DELETION_LEDGER_URL, DELETION_LEDGER_BEARER_TOKEN, and COMMERCIAL_E2E_DELETION_LEDGER_ACK=${destructiveDeletionAcknowledgement}; otherwise leave all three unset to test fail-closed deletion.`);
+    }
+    if (deletionLedgerUrl && new URL(deletionLedgerUrl).protocol !== "https:") {
+      throw new Error("Destructive account-deletion E2E requires an HTTPS separately durable ledger endpoint.");
+    }
+    this.destructiveDeletionEnabled = Boolean(deletionLedgerUrl && deletionLedgerToken && deletionAcknowledged);
     this.admin = createClient(this.url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
   }
 
@@ -93,6 +111,82 @@ export class IsolatedCommercialEnvironment {
     if (result.error) throw new Error("Could not seed a synthetic commercial opportunity.");
     this.opportunities.add(result.data.id);
     return result.data;
+  }
+
+  async createReviewedOpportunity(suffix: string, reviewerId: string, kind: "university-course" | "apprenticeship-vacancy" = "university-course"): Promise<SyntheticReviewedOpportunity> {
+    const stamp = crypto.randomUUID();
+    const now = new Date();
+    const retrievedAt = now.toISOString();
+    const deadline = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString();
+    const result = await this.admin.from("opportunities").insert({
+      kind,
+      sector: "technology",
+      title: `RF E2E reviewed ${suffix} ${stamp}`,
+      provider_name: "Routefinder synthetic provider",
+      location: kind === "apprenticeship-vacancy" ? "Manchester" : "London",
+      summary: "Synthetic reviewed commercial activation record",
+      deadline,
+      application_cycle: kind === "university-course" ? 2027 : null,
+      application_url: "https://example.test/apply",
+      source_url: "https://example.test/source",
+      source_authority: `commercial-e2e-${this.projectRef}`,
+      source_id: stamp,
+      retrieved_at: retrievedAt,
+      verified_at: retrievedAt,
+      freshness: "high",
+      freshness_expires_at: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      state: "open",
+      publication_state: "draft",
+      raw_snapshot: { restricted: true, synthetic: true },
+    }).select("id,title").single();
+    if (result.error || !result.data) throw new Error("Could not seed a synthetic reviewed commercial opportunity.");
+    this.opportunities.add(result.data.id);
+
+    const requirement = await this.admin.rpc("review_catalogue_fact_mutation", {
+      p_opportunity_id: result.data.id,
+      p_requirement_id: null,
+      p_reviewer_id: reviewerId,
+      p_action: "create-requirement",
+      p_fact: {
+        kind: "experience",
+        label: `Reviewed evidence requirement ${suffix}`,
+        supportingText: "Synthetic requirement reviewed against the recorded commercial E2E source.",
+        sourceUrl: "https://example.test/source",
+        retrievedAt,
+        hardRequirement: false,
+        structuredValue: { type: "experience", synthetic: true },
+      },
+      p_note: "Reviewed synthetic requirement for isolated commercial E2E.",
+    });
+    if (requirement.error || typeof requirement.data !== "string") throw new Error("Could not seed a reviewed synthetic requirement.");
+
+    const publication = await this.admin.rpc("review_catalogue_publication", {
+      p_opportunity_id: result.data.id,
+      p_reviewer_id: reviewerId,
+      p_decision: "published",
+      p_note: "Published synthetic reviewed opportunity for isolated commercial E2E.",
+    });
+    if (publication.error) throw new Error("Could not publish a reviewed synthetic commercial opportunity.");
+
+    return { id: result.data.id, title: result.data.title, requirementId: requirement.data };
+  }
+
+  async provisionCycleEntitlement(userId: string) {
+    const result = await this.admin.from("entitlements").upsert({
+      user_id: userId,
+      plan: "cycle",
+      status: "active",
+      starts_at: new Date().toISOString(),
+      ends_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    }, { onConflict: "user_id" }).select("user_id,plan,status,ends_at").single();
+    if (result.error) throw new Error("Could not provision a synthetic Cycle entitlement.");
+    return result.data;
+  }
+
+  async portfolioItemId(userId: string, opportunityId: string) {
+    const result = await this.admin.from("portfolio_items").select("id").eq("user_id", userId).eq("opportunity_id", opportunityId).eq("active", true).single();
+    if (result.error || !result.data) throw new Error("Could not find the synthetic portfolio item for E2E authorisation coverage.");
+    return result.data.id;
   }
 
   async cleanup() {

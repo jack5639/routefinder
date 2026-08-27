@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { PageHeading } from "@/components/page-heading";
 import { requireUser } from "@/lib/auth";
 import { buildStartingStrategy } from "@/lib/mvp/starting-strategy";
+import { launchApplicationCycle } from "@/lib/catalog/commercial/policy";
 import type { Qualification, StudentProfile } from "@/lib/mvp/types";
 import { createClient } from "@/lib/supabase/server";
 
@@ -15,7 +16,7 @@ export default async function StrategyPage() {
     supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
     supabase.from("qualifications").select("*").eq("user_id", user.id),
   ]);
-  if (!profileResult.data) redirect("/readiness");
+  if (!profileResult.data || profileResult.data.application_cycle !== launchApplicationCycle) redirect("/readiness");
   const row = profileResult.data;
   const profile: StudentProfile = {
     id: user.id,

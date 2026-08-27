@@ -16,7 +16,7 @@ const legacySchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const context = await getMutationApiContext();
+  const context = await getMutationApiContext(request);
   if (!context) return apiError("Sign in before importing prototype data.", 401, "unauthorised");
   if (!(await consumeRateLimit(context, "prototype-import", 5, 3600))) {
     return apiError("Too many import attempts. Try again shortly.", 429, "rate-limited");

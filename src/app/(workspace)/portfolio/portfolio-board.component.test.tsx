@@ -30,9 +30,10 @@ describe("PortfolioBoard decision-view details", () => {
     }), { status: 200 }));
   });
 
-  it("makes assessed and unassessed fit preferences available in an expandable native details control", async () => {
+  it("shows the fit limitation before making its details expandable", async () => {
     render(<PortfolioBoard />);
     await screen.findByText("currently strong");
+    expect(screen.getByText("Limited view: 2 preference areas assessed; 2 not assessed yet.")).toBeVisible();
 
     const details = Array.from(document.querySelectorAll("details")).find((element) => element.textContent?.includes("Assessed"));
     expect(details).not.toBeNull();
@@ -44,5 +45,26 @@ describe("PortfolioBoard decision-view details", () => {
     expect(within(details!).getByText("Location and travel cannot yet be assessed.")).toBeVisible();
     expect(within(details!).getByText("Work styles cannot yet be assessed.")).toBeVisible();
     expect(within(details!).getByText("Checks to make")).toBeVisible();
+  });
+
+  it("keeps a hidden saved record identifiable and warns against relying on it to apply", async () => {
+    global.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      items: [{
+        id: "portfolio-2",
+        title: "Former software vacancy",
+        providerName: "Example employer",
+        externalUrl: "https://example.com/source",
+        needsChecking: true,
+        savedStatus: { code: "catalogue-changed", message: "This saved reviewed record no longer passes the public catalogue safety checks.", doNotApply: true },
+        assessment: null,
+        requirements: [],
+        graph: [],
+      }],
+    }), { status: 200 }));
+
+    render(<PortfolioBoard />);
+    expect(await screen.findByText("Former software vacancy")).toBeVisible();
+    expect(screen.getByText("Do not rely on this saved record to apply.")).toBeVisible();
+    expect(screen.getByRole("link", { name: /check the current source/i })).toHaveAttribute("href", "https://example.com/source");
   });
 });

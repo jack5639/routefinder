@@ -10,6 +10,7 @@ import {
 } from "@/lib/api-context";
 import { activePlan, canAddActiveOpportunity } from "@/lib/mvp/entitlements";
 import { portfolioCreateSchema } from "@/lib/mvp/schemas";
+import { safeOpportunitySnapshot } from "@/lib/mvp/opportunity-snapshot";
 import { publicOpportunityWithRequirements } from "@/lib/supabase/public-catalogue";
 
 export async function GET() {
@@ -20,7 +21,7 @@ export async function GET() {
   const { data, error } = await context.supabase
     .from("portfolio_items")
     .select(
-      `id,user_id,opportunity_id,external_title,external_url,active,created_at,updated_at,opportunities(${publicOpportunityWithRequirements}),applications(*)`,
+      `id,user_id,opportunity_id,opportunity_snapshot,external_title,external_url,active,created_at,updated_at,opportunities(${publicOpportunityWithRequirements}),applications(*)`,
     )
     .eq("user_id", context.user.id)
     .order("created_at");
@@ -30,7 +31,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const context = await getMutationApiContext();
+  const context = await getMutationApiContext(request);
 
   if (!context) return apiError("Sign in to save an opportunity.", 401, "unauthorised");
   if (!(await consumeRateLimit(context, "portfolio-write", 30, 3600))) {
@@ -39,14 +40,16 @@ export async function POST(request: Request) {
 
   const parsed = portfolioCreateSchema.safeParse(await parseJson(request));
   if (!parsed.success) return apiError("Choose a verified opportunity or provide a valid external link.");
+  let reviewedOpportunity: Record<string, unknown> | null = null;
   if ("opportunityId" in parsed.data) {
     const { data: opportunity } = await context.supabase
       .from("opportunities")
-      .select("id")
+      .select("id,title,provider_name,kind,sector,location,application_url,source_url,source_authority,deadline,state,freshness,publication_state,verified_at")
       .eq("id", parsed.data.opportunityId)
       .eq("publication_state", "published")
       .maybeSingle();
     if (!opportunity) return apiError("That reviewed opportunity is unavailable.", 404, "not-found");
+    reviewedOpportunity = opportunity;
   }
 
   const existingQuery = context.supabase
@@ -78,9 +81,9 @@ export async function POST(request: Request) {
     );
   }
 
-  const row: Record<string, string> =
+  const row: Record<string, unknown> =
     "opportunityId" in parsed.data
-      ? { user_id: context.user.id, opportunity_id: parsed.data.opportunityId }
+      ? { user_id: context.user.id, opportunity_id: parsed.data.opportunityId, opportunity_snapshot: safeOpportunitySnapshot(reviewedOpportunity!) }
       : {
           user_id: context.user.id,
           external_title: parsed.data.externalTitle,

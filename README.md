@@ -8,18 +8,19 @@ Routefinder is a decision and preparation aid. It does not predict admission, re
 
 ## Repository status
 
-This repository contains the customer-ready MVP implementation scheduled for 15 October 2026, alongside a clearly separated compatibility demo. External infrastructure, reviewed launch catalogue content, production credentials, and specialist approvals are still release gates.
+This repository contains the customer-ready MVP implementation for a gated founding launch targeted from 15 September 2026, with 15 October 2026 as the latest planned paid opening for the main January-deadline cohort, alongside a clearly separated compatibility demo. External infrastructure, reviewed launch catalogue content, production credentials, and specialist approvals are still release gates; the date never overrides them.
 
 Commercial MVP implementation:
 
 - Supabase email magic-link authentication, protected pages, Postgres migrations, RLS, audit and consent records;
 - readiness check with explicit unknown qualification states;
+- account-free `/start` paths for one reviewed requirement, a two-or-three-option comparison, or cautious route-family exploration;
 - published-opportunity search, official apprenticeship API ingestion, Discover Uni archive verification, manual provider-source entry, and fail-closed publication review;
 - five deterministic decision views with source facts, risks, missing information, and direct-check actions;
 - server-owned portfolio, evidence bank, requirement mapping, weekly actions, and application tracker;
 - Free and Cycle limits, one-time Stripe Checkout, signed idempotent webhooks, refunds, disputes, and cycle expiry;
 - allowlisted analytics, source reporting, JSON export, explicit prototype import, and account deletion;
-- commercial landing, pricing, source-backed guides, policy baselines, health checks, secure headers, redacted logging, CI, component tests, and browser-test infrastructure.
+- commercial landing, pricing, source-backed guides, policy baselines, separate liveness and launch-readiness checks, secure headers, redacted logging, CI, component tests, and browser-test infrastructure.
 
 Compatibility demo implementation:
 
@@ -30,7 +31,7 @@ Compatibility demo implementation:
 Release gates not satisfiable from source code alone:
 
 - create and configure separate London-region staging and production Supabase projects;
-- connect separate Vercel preview and production projects and production domain;
+- connect one Vercel project to Git, with Preview deployments isolated to staging and Production deployments isolated to production, then configure the production domain;
 - provide Stripe and official catalogue credentials;
 - populate and review the minimum launch catalogue without demo records;
 - complete specialist legal, privacy, safeguarding, accessibility, refund, complaint, and retention review;
@@ -44,8 +45,8 @@ The final product and commercial direction is in [docs/product-decisions.md](doc
 
 ## Requirements
 
-- Node.js 20.19+, 22.13+, or 24+
-- pnpm 11
+- Node.js 22 or 24
+- pnpm 11.19 (pinned in `package.json`)
 
 The project uses the package manager pinned in `package.json`.
 
@@ -69,13 +70,14 @@ pnpm lint
 pnpm typecheck
 pnpm build
 pnpm docs:check
+pnpm audit:prod
 pnpm test:e2e
 pnpm verify:local
 ```
 
 Run the relevant checks before handing off a change. `docs:check` validates required documents, internal links, the documentation index, retired duplicate plans, conflict markers, and `.env.example` coverage. If the environment prevents a check, report that limitation rather than implying success.
 
-`verify:local` runs the ordinary non-destructive source and public-browser gates. `release:verify` is a separate strict operator command: it fails unless every isolated Supabase security, authenticated commercial, Stripe staging, and restore suite is explicitly selected and configured. It never substitutes production credentials for missing test configuration.
+`verify:local` runs the production dependency audit plus ordinary non-destructive source and public-browser gates. `release:verify` is a separate strict operator command: it fails unless every isolated Supabase security, authenticated commercial, Stripe staging, and restore suite is explicitly selected and configured. It never substitutes production credentials for missing test configuration.
 
 ## Catalogue commands
 
@@ -90,7 +92,7 @@ The catalogue defaults to `data/catalog/catalog.sqlite`. Local databases and sna
 
 The local commands above are for the compatibility catalogue. Commercial ingestion uses the Find an Apprenticeship Display Advert API v2 and the Discover Uni/HESA dataset boundary, then requires human publication review. Do not use the prototype HTML parsers commercially.
 
-Commercial catalogue operation is performed from `/admin/catalogue` by an account in `ADMIN_EMAILS`. The review workspace provides a server-paged queue, source and readiness filters, safe source-change diffs, reviewed opportunity and requirement editing, and the authoritative launch-readiness report. Source credentials and founder-recorded approval references are hard gates. Imports create drafts or pending revisions only; the service-role-only database publication transaction is the sole publication path.
+Commercial catalogue operation is performed from `/admin/catalogue` by an account in `ADMIN_EMAILS`. The review workspace provides a server-paged queue, source and readiness filters, safe source-change diffs, reviewed opportunity and requirement editing, the authoritative launch-readiness report, and auditable source permission attestations. No document upload or written reference is required, but an administrator must confirm the applicable API terms or licence basis before publication. Imports create drafts or pending revisions only; the service-role-only database publication transaction is the sole publication path.
 
 The scheduled commercial cadence is:
 
@@ -98,13 +100,14 @@ The scheduled commercial cadence is:
 - Discover Uni archive observation each Wednesday;
 - daily stale-run recovery, freshness expiry, and old-review-backlog checks.
 
-Only a complete successful apprenticeship snapshot can close missing vacancies. Discover Uni absence never automatically closes or withdraws a course.
+Only a complete successful apprenticeship snapshot can close missing vacancies. A separate daily maintenance pass closes records whose displayed deadline has passed. Discover Uni absence never automatically closes or withdraws a course. Public reads are fail-closed behind open-state, deadline, freshness, source-run, requirement, source-attestation, and manually verified 2027 university-cycle checks. Launch readiness also requires every promoted sector × route persona to have at least three relevant open, source-backed opportunities.
 
 ## Current route map
 
 | Route | Current purpose |
 | --- | --- |
 | `/` | Commercial landing page |
+| `/start` | Account-free first useful result with three bounded starting paths |
 | `/demo` | Clearly labelled prototype entry |
 | `/signin` | Supabase email magic-link sign-in |
 | `/readiness` | Authenticated readiness check |
@@ -116,6 +119,8 @@ Only a complete successful apprenticeship snapshot can close missing vacancies. 
 | `/account` | Entitlement, export, explicit import, deletion, and sign-out |
 | `/admin/catalogue` | Allowlisted internal source and publication review |
 | `/pricing` | Free and one-time Cycle offer |
+| `/api/health` | Process liveness only; does not claim launch readiness |
+| `/api/readiness` | Coarse fail-closed production configuration, migration, catalogue, deletion-ledger, and payment readiness |
 | `/quiz` | Browser-saved route quiz |
 | `/results` | Deterministic comparison board |
 | `/roadmap/[routeId]` | Route-specific prototype roadmap |

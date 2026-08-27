@@ -3,6 +3,9 @@ import type { User } from "@supabase/supabase-js";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { isSameOriginRequest } from "@/lib/same-origin";
+
+export { isSameOriginRequest } from "@/lib/same-origin";
 
 export interface ApiContext {
   supabase: NonNullable<Awaited<ReturnType<typeof createClient>>>;
@@ -27,7 +30,8 @@ export async function getApiContext(): Promise<ApiContext | null> {
   return user ? { supabase, user } : null;
 }
 
-export async function getMutationApiContext(): Promise<MutationApiContext | null> {
+export async function getMutationApiContext(request: Request): Promise<MutationApiContext | null> {
+  if (!isSameOriginRequest(request)) return null;
   const context = await getApiContext();
 
   return context ? { ...context, admin: createAdminClient() } : null;

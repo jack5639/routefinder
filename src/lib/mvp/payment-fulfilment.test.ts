@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { checkoutSessionIsPaid, isExpectedStripeMode, isNewerPaymentEvent } from "@/lib/mvp/payment-fulfilment";
+import { checkoutMetadataSchema, checkoutSessionIsPaid, isExpectedStripeMode, isNewerPaymentEvent } from "@/lib/mvp/payment-fulfilment";
 
 const metadata = {
   reservation_id: "f4a64c27-7a1b-4a57-bc07-9a3dd31a1c7f",
@@ -10,6 +10,10 @@ const metadata = {
 };
 
 describe("Stripe fulfilment validation", () => {
+  it("rejects checkout metadata for an unsupported application cycle", () => {
+    expect(() => checkoutMetadataSchema.parse({ ...metadata, application_cycle: "2028" })).toThrow();
+  });
+
   it("accepts only a paid session with the reservation's expected GBP amount", () => {
     expect(checkoutSessionIsPaid({ status: "complete", paymentStatus: "paid", currency: "gbp", amountTotal: 2900, metadata }).ok).toBe(true);
     expect(checkoutSessionIsPaid({ status: "open", paymentStatus: "paid", currency: "gbp", amountTotal: 2900, metadata })).toMatchObject({ code: "checkout_not_complete" });

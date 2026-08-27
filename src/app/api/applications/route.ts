@@ -9,7 +9,7 @@ export async function GET() {
 
   const { data, error } = await context.supabase
     .from("applications")
-    .select("*, portfolio_items(external_title, external_url, opportunities(title, provider_name, state))")
+    .select("*, portfolio_items(external_title, external_url, opportunity_snapshot, opportunities(title, provider_name, state))")
     .eq("user_id", context.user.id)
     .order("deadline", { ascending: true, nullsFirst: false });
 
@@ -18,7 +18,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const context = await getMutationApiContext();
+  const context = await getMutationApiContext(request);
   if (!context) return apiError("Sign in to track an application.", 401, "unauthorised");
   const parsed = applicationSchema.safeParse(await parseJson(request));
   if (!parsed.success) return apiError("Check the application details and try again.");

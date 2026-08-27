@@ -8,6 +8,7 @@ import {
   normaliseRoadmapFollowUpAnswers,
 } from "@/lib/roadmaps/roadmap-generation-input";
 import { scoreRoute } from "@/lib/scoring";
+import { isSameOriginRequest } from "@/lib/same-origin";
 
 export const runtime = "nodejs";
 
@@ -82,6 +83,7 @@ function getResponseOutputText(response: unknown) {
 }
 
 export async function POST(request: Request) {
+  if (!isSameOriginRequest(request)) return jsonError("cross-origin", "Cross-origin requests are not allowed.", 403);
   if (!process.env.OPENAI_API_KEY) {
     return jsonError(
       "missing-api-key",

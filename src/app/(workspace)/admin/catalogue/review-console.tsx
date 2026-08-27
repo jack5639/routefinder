@@ -14,14 +14,40 @@ type Review = { id: string; reviewer_id: string; decision: string; note?: string
 type ManualReview = { id: string; requirement_id?: string; action: string; reviewer_id: string; reviewer_note: string; reviewed_at: string };
 type Opportunity = {
   id: string; kind: string; sector: string; title: string; provider_name: string; location: string; summary: string;
-  deadline?: string; application_url: string; source_url: string; source_authority: string; publication_state: string;
+  deadline?: string; application_cycle?: number; application_url: string; source_url: string; source_authority: string; publication_state: string;
   freshness: string; state: string; verified_at?: string; retrieved_at: string; attribution?: Record<string, string>;
   requirements: Requirement[]; catalogue_fact_revisions: Revision[]; source_issues: Array<{ id: string; status: string; issue_kind: string; detail?: string }>;
   publication_reviews: Review[]; catalogue_manual_revisions: ManualReview[]; readinessFailures: string[];
 };
 type SourceRun = { id: string; source_authority: string; status: string; retrieved_count: number; records_changed?: number; complete_snapshot?: boolean; started_at: string; completed_at?: string; error_code?: string };
 type Pagination = { page: number; pageSize: number; total: number; pages: number };
-type Readiness = { ready: boolean; published: number; minimum: number; globalReasons: string[]; distribution: Array<{ sector: string; kind: string; count: number; shortfall: number }> };
+type Readiness = {
+  ready: boolean;
+  published: number;
+  minimum: number;
+  globalReasons: string[];
+  distribution: Array<{
+    sector: string;
+    kind: string;
+    count: number;
+    shortfall: number;
+    candidates: number;
+    distinctCandidateProviders: number;
+  }>;
+  sourceAttestations: Array<{
+    id: string;
+    source_authority: "find-an-apprenticeship-api-v2" | "discover-uni-hesa";
+    permission_basis: string;
+    attested_at: string;
+  }>;
+  promotedPersonaCoverage: Array<{
+    id: string;
+    label: string;
+    relevantOpenSourceBacked: number;
+    minimum: number;
+    passes: boolean;
+  }>;
+};
 
 const initialFilters = {
   source: "", kind: "", sector: "", publication: "", freshness: "", state: "", sort: "urgent",
@@ -91,21 +117,67 @@ export function ReviewConsole() {
   }
 
   async function create(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); const form = new FormData(event.currentTarget);
+    event.preventDefault(); const target = event.currentTarget; const form = new FormData(target);
     const ok = await mutate("/api/admin/catalogue", {
       kind: form.get("kind"), sector: form.get("sector"), title: form.get("title"), providerName: form.get("providerName"),
       location: form.get("location"), summary: form.get("summary"), deadline: form.get("deadline") || undefined,
+      applicationCycle: form.get("applicationCycle") ? Number(form.get("applicationCycle")) : undefined,
       applicationUrl: form.get("applicationUrl"), sourceUrl: form.get("sourceUrl"),
     }, "Manual source-backed draft created.");
-    if (ok) event.currentTarget.reset();
+    if (ok) target.reset();
+  }
+
+  async function attestSource(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); const target = event.currentTarget;
+    const form = new FormData(target);
+    const sourceAuthority = String(form.get("sourceAuthority"));
+    const permissionBasis = String(form.get("permissionBasis"));
+    const note = String(form.get("note") ?? "").trim();
+    if (note.length < 10) { setMessage("Add a short note confirming why this source may be used."); return; }
+    const ok = await mutate("/api/admin/catalogue/sources", { sourceAuthority, permissionBasis, note }, "Source permission attestation recorded.");
+    if (ok) target.reset();
   }
 
   function noteFor(key: string) { return notes[key]?.trim() ?? ""; }
+
+  function reviewCell(cell: Readiness["distribution"][number]) {
+    const next = {
+      ...initialFilters,
+      source: cell.kind === "university-course" ? "discover-uni-hesa" : "find-an-apprenticeship-api-v2",
+      kind: cell.kind,
+      sector: cell.sector,
+      publication: "draft",
+      sort: cell.kind === "apprenticeship-vacancy" ? "deadline" : "coverage-shortfall",
+    };
+    setFilters(next);
+    setAppliedFilters(next);
+    setMessage(`Loading ${cell.sector} ${cell.kind === "university-course" ? "university courses" : "apprenticeship vacancies"} awaiting review…`);
+    window.setTimeout(() => {
+      const queue = document.getElementById("catalogue-review-queue");
+      if (queue && typeof queue.scrollIntoView === "function") queue.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+  }
 
   async function review(id: string, decision: string) {
     const note = noteFor(`opportunity:${id}`);
     if (note.length < 3) { setMessage("Add a reviewer note before making a publication decision."); return; }
     await mutate("/api/admin/catalogue/review", { opportunityId: id, decision, note }, `Opportunity moved to ${decision}.`);
+  }
+
+  async function verifyOpportunity(id: string) {
+    const note = noteFor(`opportunity:${id}`);
+    if (note.length < 3) { setMessage("Add a reviewer note after checking the official source before confirming opportunity facts."); return; }
+    await mutate("/api/admin/catalogue/facts", {
+      action: "verify-opportunity", opportunityId: id, state: "open", freshness: "high", note,
+    }, "Opportunity facts confirmed from the official source.");
+  }
+
+  async function verifyOpportunityCycle(id: string) {
+    const note = noteFor(`opportunity:${id}`);
+    if (note.length < 3) { setMessage("Add a reviewer note after checking the provider source confirms 2027 entry."); return; }
+    await mutate("/api/admin/catalogue/facts", {
+      action: "verify-opportunity-cycle", opportunityId: id, applicationCycle: 2027, note,
+    }, "2027 application cycle verified from the provider source.");
   }
 
   async function resolveRevision(revisionId: string, action: string) {
@@ -162,7 +234,27 @@ export function ReviewConsole() {
       <h2 id="launch-readiness" className="text-2xl font-black">Launch catalogue readiness</h2>
       <p className="mt-2 font-bold">{readiness.published} / {readiness.minimum} published · {readiness.ready ? "all catalogue gates pass" : "not ready to launch"}</p>
       {!readiness.ready && <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-white/80">{readiness.globalReasons.slice(0, 8).map((reason) => <li key={reason}>{reason}</li>)}</ul>}
-      <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{readiness.distribution.map((cell) => <div key={`${cell.sector}-${cell.kind}`} className="rounded-xl bg-white/10 p-3 text-sm"><strong>{cell.sector}</strong><br />{cell.kind}: {cell.count}{cell.shortfall ? ` (${cell.shortfall} short)` : ""}</div>)}</div>
+      <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{readiness.distribution.map((cell) => <div key={`${cell.sector}-${cell.kind}`} className="rounded-xl bg-white/10 p-3 text-sm"><strong>{cell.sector}</strong><br />{cell.kind}: {cell.count} published{cell.shortfall ? ` (${cell.shortfall} short)` : ""}<br /><span className="text-white/70">{cell.candidates} candidates · {cell.distinctCandidateProviders} providers</span>{cell.candidates > 0 && cell.shortfall > 0 && <button type="button" onClick={() => reviewCell(cell)} className="mt-2 min-h-10 w-full rounded-full border border-white/30 px-3 font-black">Review this cell</button>}</div>)}</div>
+      <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{(readiness.promotedPersonaCoverage ?? []).map((persona) => <div key={persona.id} className={`rounded-xl p-3 text-sm ${persona.passes ? "bg-white/10" : "bg-coral/20"}`}><strong>{persona.label}</strong><br />{persona.relevantOpenSourceBacked} open source-backed opportunities · minimum {persona.minimum}</div>)}</div>
+    </section>}
+
+    {readiness && <section className="mt-6 rounded-[2rem] bg-white p-6" aria-labelledby="source-attestations">
+      <h2 id="source-attestations" className="text-2xl font-black">Source permission attestations</h2>
+      <p className="mt-2 max-w-3xl text-sm text-ink/70">No document upload or written reference is required. Before publishing records from either source, an admin must confirm the applicable permission basis and leave a brief audit note. Reconfirming a source replaces its previous active confirmation while retaining the audit history.</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">{([
+        ["find-an-apprenticeship-api-v2", "Find an Apprenticeship API", "api-terms-confirmed"],
+        ["discover-uni-hesa", "Discover Uni / HESA", "open-licence-confirmed"],
+      ] as const).map(([sourceAuthority, label, basis]) => {
+        const active = (readiness.sourceAttestations ?? []).find((item) => item.source_authority === sourceAuthority);
+        return <form key={sourceAuthority} onSubmit={attestSource} className="rounded-2xl bg-oat p-4">
+          <h3 className="font-black">{label}</h3>
+          <p className={`mt-1 text-sm font-bold ${active ? "text-leaf" : "text-coral"}`}>{active ? `Active: ${active.permission_basis} · ${new Date(active.attested_at).toLocaleString()}` : "No active attestation — publishing is blocked."}</p>
+          <input type="hidden" name="sourceAuthority" value={sourceAuthority} />
+          <input type="hidden" name="permissionBasis" value={basis} />
+          <textarea required minLength={10} maxLength={1000} name="note" aria-label={`${label} permission attestation note`} placeholder="Briefly confirm the applicable permission/terms and your review." className="mt-3 min-h-20 w-full rounded-xl bg-white p-3 text-sm" />
+          <button className="mt-3 min-h-11 rounded-full bg-ink px-4 text-sm font-black text-white">{active ? "Refresh confirmation" : "Confirm source permission"}</button>
+        </form>;
+      })}</div>
     </section>}
 
     <div className="mt-6 flex flex-wrap gap-3">
@@ -170,7 +262,7 @@ export function ReviewConsole() {
       <button type="button" onClick={() => void sync("discover-uni")} className="min-h-11 rounded-full border border-ink/15 bg-white px-5 py-3 font-black">Sync Discover Uni archive</button>
     </div>
 
-    <section className="mt-6 rounded-[2rem] bg-white p-5" aria-labelledby="queue-filters">
+    <section id="catalogue-review-queue" className="mt-6 rounded-[2rem] bg-white p-5" aria-labelledby="queue-filters">
       <h2 id="queue-filters" className="text-2xl font-black">Review queue</h2>
       <form onSubmit={(event) => { event.preventDefault(); setAppliedFilters(filters); }} className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label className="text-sm font-bold">Source<select value={filters.source} onChange={(e) => setFilters({ ...filters, source: e.target.value })} className="mt-1 min-h-11 w-full rounded-xl border px-3"><option value="">All sources</option><option value="find-an-apprenticeship-api-v2">Apprenticeship API</option><option value="discover-uni-hesa">Discover Uni</option><option value="provider-manual-review">Provider review</option><option value="employer-manual-review">Employer review</option></select></label>
@@ -195,6 +287,7 @@ export function ReviewConsole() {
       <select aria-label="Draft sector" name="sector" className="min-h-12 rounded-xl border px-3">{["technology","engineering","business","finance"].map((value) => <option key={value}>{value}</option>)}</select>
       <input required aria-label="Title" name="title" placeholder="Title" className="min-h-12 rounded-xl border px-3" /><input required aria-label="Provider or employer" name="providerName" placeholder="Provider or employer" className="min-h-12 rounded-xl border px-3" />
       <input required aria-label="Location" name="location" placeholder="Location" className="min-h-12 rounded-xl border px-3" /><input aria-label="Deadline" type="datetime-local" name="deadline" className="min-h-12 rounded-xl border px-3" />
+      <select aria-label="Application cycle" name="applicationCycle" className="min-h-12 rounded-xl border px-3"><option value="">Cycle to verify later</option><option value="2027">2027 entry cycle</option></select>
       <textarea required minLength={10} aria-label="Source-backed summary" name="summary" placeholder="Source-backed summary" className="min-h-24 rounded-xl border p-3 sm:col-span-2" />
       <input required type="url" aria-label="Official application URL" name="applicationUrl" placeholder="Official application URL" className="min-h-12 rounded-xl border px-3" /><input required type="url" aria-label="Source URL" name="sourceUrl" placeholder="Source URL" className="min-h-12 rounded-xl border px-3" />
       <button className="min-h-12 rounded-full bg-leaf px-5 font-black text-white sm:col-span-2 sm:justify-self-start">Create draft</button>
@@ -205,13 +298,13 @@ export function ReviewConsole() {
         const lastReview = [...item.publication_reviews].sort((a, b) => b.reviewed_at.localeCompare(a.reviewed_at))[0];
         return <article key={item.id} className="overflow-hidden rounded-[2rem] bg-white p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0"><p className="text-xs font-black uppercase tracking-wide text-leaf">{item.source_authority} · {item.kind} · {item.sector} · {item.publication_state}</p><h2 className="mt-2 text-xl font-black">{item.title}</h2><p className="font-semibold text-ink/55">{item.provider_name} · {item.location} · {item.freshness} · {item.state}</p>
+            <div className="min-w-0"><p className="text-xs font-black uppercase tracking-wide text-leaf">{item.source_authority} · {item.kind} · {item.sector} · {item.publication_state}</p><h2 className="mt-2 text-xl font-black">{item.title}</h2><p className="font-semibold text-ink/55">{item.provider_name} · {item.location} · {item.freshness} · {item.state}{item.kind === "university-course" ? ` · ${item.application_cycle ? `${item.application_cycle} cycle` : "cycle not verified"}` : ""}</p>
               <div className="mt-2 flex flex-wrap gap-3 text-sm font-bold"><a className="text-leaf underline" href={item.application_url} target="_blank" rel="noreferrer">Official application destination</a><a className="text-leaf underline" href={item.source_url} target="_blank" rel="noreferrer">Opportunity source</a></div>
               {lastReview && <p className="mt-2 text-xs text-ink/55">Last decision: {lastReview.decision} by {lastReview.reviewer_id} at {new Date(lastReview.reviewed_at).toLocaleString()} · {lastReview.note}</p>}
             </div>
             <div className="w-full max-w-md">
               <label className="text-sm font-bold">Mandatory publication note<textarea value={notes[`opportunity:${item.id}`] ?? ""} onChange={(e) => setNotes({ ...notes, [`opportunity:${item.id}`]: e.target.value })} className="mt-1 min-h-20 w-full rounded-xl border p-3" /></label>
-              <div className="mt-2 flex flex-wrap gap-2"><button type="button" onClick={() => void review(item.id, "review")} className="min-h-10 rounded-full border px-4 text-sm font-black">Send to review</button><button type="button" onClick={() => void review(item.id, "published")} className="min-h-10 rounded-full bg-leaf px-4 text-sm font-black text-white">Publish</button><button type="button" onClick={() => void review(item.id, "withdrawn")} className="min-h-10 rounded-full bg-coral/10 px-4 text-sm font-black">Withdraw now</button></div>
+              <div className="mt-2 flex flex-wrap gap-2">{item.state === "open" && <button type="button" onClick={() => void verifyOpportunity(item.id)} className="min-h-10 rounded-full border border-leaf/30 bg-leaf/10 px-4 text-sm font-black">Confirm facts after source check</button>}{item.kind === "university-course" && item.application_cycle !== 2027 && <button type="button" onClick={() => void verifyOpportunityCycle(item.id)} className="min-h-10 rounded-full border border-sky/40 bg-sky/20 px-4 text-sm font-black">Confirm 2027 cycle</button>}<button type="button" onClick={() => void review(item.id, "review")} className="min-h-10 rounded-full border px-4 text-sm font-black">Send to review</button><button type="button" onClick={() => void review(item.id, "published")} className="min-h-10 rounded-full bg-leaf px-4 text-sm font-black text-white">Publish</button><button type="button" onClick={() => void review(item.id, "withdrawn")} className="min-h-10 rounded-full bg-coral/10 px-4 text-sm font-black">Withdraw now</button></div>
             </div>
           </div>
           <section aria-label="Publication readiness" className={`mt-4 rounded-xl p-4 text-sm ${item.readinessFailures.length ? "bg-coral/10" : "bg-leaf/10"}`}><p className="font-black">{item.readinessFailures.length ? "Cannot publish yet" : "Record publication checks currently pass"}</p>{item.readinessFailures.length > 0 && <ul className="mt-2 list-disc pl-5">{item.readinessFailures.map((failure) => <li key={failure}>{failure}</li>)}</ul>}</section>

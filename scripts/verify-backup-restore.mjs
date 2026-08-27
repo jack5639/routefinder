@@ -15,13 +15,19 @@ const env = {
   targetRef: process.env.SUPABASE_RESTORE_TEST_PROJECT_REF,
   productionRef: process.env.SUPABASE_PRODUCTION_PROJECT_REF,
   acknowledgement: process.env.RESTORE_TEST_ACK,
+  deletionLedgerUrl: process.env.DELETION_LEDGER_URL,
+  deletionLedgerBearerToken: process.env.DELETION_LEDGER_BEARER_TOKEN,
 };
 const acknowledgement = "routefinder-disposable-restore-test-v2";
 const sentinelMarker = "routefinder-disposable-restore-test-v1";
 const expectedMigrations = [
   "202607290001", "202607290002", "202607290003", "202607290004",
   "202607300001", "202607300002", "202607300003", "202607300004",
-  "202607300005",
+  "202607300005", "20260731172503",
+  "20260801215120", "20260801222228", "20260801223008", "20260801225211",
+  "20260801230116", "20260803121300", "20260808152000", "20260808152500",
+  "20260808153500", "20260812120000", "20260812130000",
+  "20260827202316",
 ];
 if (Object.entries(env).some(([key, value]) => key !== "productionRef" && key !== "acknowledgement" && !value) || env.acknowledgement !== acknowledgement) {
   throw new Error(`Set the source and disposable restore-target variables and acknowledge exactly ${acknowledgement}.`);
@@ -35,6 +41,7 @@ for (const ref of [env.sourceRef, env.targetRef]) {
 
 const directory = mkdtempSync(join(tmpdir(), "routefinder-restore-"));
 const archive = join(directory, "staging.dump");
+const fixtureArchive = join(directory, "fixture-before-deletion.dump");
 const stamp = randomUUID();
 const admin = createClient(env.targetUrl, env.targetServiceKey, { auth: { autoRefreshToken: false, persistSession: false } });
 let userId;
@@ -56,6 +63,41 @@ function run(command, args) {
 }
 function fail(error, message) {
   if (error) throw new Error(`${message}: ${error.message}`);
+}
+function isLedgerEntry(value) {
+  return value && typeof value === "object" && typeof value.id === "string"
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.subject_id)
+    && typeof value.deleted_at === "string" && !Number.isNaN(new Date(value.deleted_at).valueOf())
+    && value.reason === "account-deletion";
+}
+async function ledgerRequest(url, init) {
+  const response = await fetch(url, {
+    ...init,
+    headers: { authorization: `Bearer ${env.deletionLedgerBearerToken}`, accept: "application/json", ...init.headers },
+  });
+  if (!response.ok) throw new Error(`Deletion ledger request failed with ${response.status}`);
+  return response.json();
+}
+async function recordDeletionLedgerEntry(subjectId, deletedAt) {
+  const body = await ledgerRequest(env.deletionLedgerUrl, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ subject_id: subjectId, deleted_at: deletedAt, reason: "account-deletion" }),
+  });
+  if (!body || !isLedgerEntry(body.entry) || body.entry.subject_id !== subjectId || body.entry.deleted_at !== deletedAt) {
+    throw new Error("Deletion ledger returned an invalid durable write receipt");
+  }
+}
+async function loadDeletionReplay(from, through) {
+  const endpoint = new URL(env.deletionLedgerUrl);
+  endpoint.searchParams.set("from", from);
+  endpoint.searchParams.set("through", through);
+  const body = await ledgerRequest(endpoint, { method: "GET" });
+  if (!body || body.complete !== true || !Array.isArray(body.entries) || typeof body.coverage_through !== "string"
+    || Number.isNaN(new Date(body.coverage_through).valueOf()) || new Date(body.coverage_through) < new Date(through)
+    || body.entries.some((entry) => !isLedgerEntry(entry) || new Date(entry.deleted_at) <= new Date(from) || new Date(entry.deleted_at) > new Date(through))) {
+    throw new Error("Deletion ledger replay batch is incomplete, malformed, or out of range");
+  }
+  return body.entries;
 }
 async function insert(table, row) {
   const result = await admin.from(table).insert(row).select().single();
@@ -92,6 +134,7 @@ try {
   for (const fn of ["save_readiness_profile", "save_evidence_requirement_link", "replace_weekly_plan", "reserve_cycle_checkout", "apply_stripe_payment_event"]) {
     assert.equal(sql(env.targetDb, `select count(*) from information_schema.routine_privileges where specific_schema='public' and routine_name='${fn}' and grantee in ('PUBLIC','anon','authenticated') and privilege_type='EXECUTE';`), "0", `${fn} has a browser-role grant after restore`);
   }
+  assert.equal(sql(env.targetDb, "select count(*) from information_schema.routine_privileges where specific_schema='public' and routine_name='replay_deleted_subject' and grantee in ('PUBLIC','anon','authenticated') and privilege_type='EXECUTE';"), "0", "Deletion replay has a browser-role grant after restore");
   assert.equal(sql(env.targetDb, "select count(*) from public.profiles p left join auth.users u on u.id=p.id where u.id is null;"), "0", "A restored profile has a broken auth reference");
 
   const created = await admin.auth.admin.createUser({ email: `restore-${stamp}@example.test`, password: `Routefinder!${randomUUID()}`, email_confirm: true });
@@ -99,9 +142,9 @@ try {
   userId = created.data.user.id;
   await insert("profiles", { id: userId, current_stage: "Year 13", application_cycle: new Date().getUTCFullYear() + 1, qualifications_complete: true });
   await insert("qualifications", { user_id: userId, qualification_type: "A level", subject: "Mathematics", grade: "A", status: "predicted" });
-  const opportunity = await insert("opportunities", { kind: "external", sector: "technology", title: `Restore fixture ${stamp}`, provider_name: "Synthetic restore provider", location: "London", summary: "Synthetic restore fixture", application_url: "https://example.test/apply", source_url: "https://example.test/source", source_authority: `restore-${stamp}`, source_id: stamp, retrieved_at: new Date().toISOString(), freshness: "high", state: "open", publication_state: "published" });
+  const opportunity = await insert("opportunities", { kind: "university-course", sector: "technology", application_cycle: 2027, title: `Restore fixture ${stamp}`, provider_name: "Synthetic restore provider", location: "London", summary: "Synthetic restore fixture", application_url: "https://example.test/apply", source_url: "https://example.test/source", source_authority: `restore-${stamp}`, source_id: stamp, retrieved_at: new Date().toISOString(), verified_at: new Date().toISOString(), freshness_expires_at: new Date(Date.now() + 30 * 86400000).toISOString(), freshness: "high", state: "open", publication_state: "published" });
   opportunityId = opportunity.id;
-  const requirement = await insert("requirements", { opportunity_id: opportunity.id, kind: "evidence", label: "Project evidence", supporting_text: "Synthetic", source_url: "https://example.test/source", retrieved_at: new Date().toISOString(), freshness: "high", publication_state: "published" });
+  const requirement = await insert("requirements", { opportunity_id: opportunity.id, kind: "evidence", label: "Project evidence", supporting_text: "Synthetic", source_url: "https://example.test/source", retrieved_at: new Date().toISOString(), verified_at: new Date().toISOString(), freshness_expires_at: new Date(Date.now() + 30 * 86400000).toISOString(), freshness: "high", publication_state: "published" });
   const portfolio = await insert("portfolio_items", { user_id: userId, opportunity_id: opportunity.id });
   const evidence = await insert("evidence_items", { user_id: userId, evidence_type: "project", happened: "Built a synthetic test", contribution: "Implemented the test", outcome: "Verified restore behavior", learned: "How restore verification works" });
   await insert("evidence_requirement_links", { user_id: userId, evidence_id: evidence.id, requirement_id: requirement.id, relevance: "Synthetic mapping", coverage: "supported" });
@@ -119,6 +162,11 @@ try {
   retainedOrderId = order.id;
   const audit = await insert("audit_events", { user_id: userId, action: "restore.synthetic", entity_type: "restore-test", entity_id: stamp });
   retainedAuditId = audit.id;
+  const backupPoint = new Date().toISOString();
+  run("pg_dump", ["--format=custom", "--no-owner", "--file", fixtureArchive, env.targetDb]);
+  const deletedAt = new Date().toISOString();
+  assert.ok(deletedAt > backupPoint, "Deletion did not occur after the synthetic backup point");
+  await recordDeletionLedgerEntry(userId, deletedAt);
   const deleted = await admin.auth.admin.deleteUser(userId);
   fail(deleted.error, "Synthetic account deletion failed");
   userId = undefined;
@@ -127,12 +175,38 @@ try {
   assert.equal((await admin.from("orders").select("user_id").eq("id", retainedOrderId).single()).data?.user_id, null, "Retained payment record was not anonymised");
   assert.equal((await admin.from("audit_events").select("user_id").eq("id", retainedAuditId).single()).data?.user_id, null, "Retained audit record was not anonymised");
 
+  // Restore the synthetic pre-deletion backup. It must visibly reintroduce the
+  // account before replay, proving this is a recovery test rather than a normal
+  // delete-cycle test.
+  run("pg_restore", ["--clean", "--if-exists", "--no-owner", "--dbname", env.targetDb, fixtureArchive]);
+  assert.ok(Number((await admin.from("profiles").select("id", { count: "exact", head: true }).eq("id", created.data.user.id)).count) > 0, "Synthetic backup did not reintroduce the deleted profile");
+
+  const replayThrough = new Date().toISOString();
+  const entries = await loadDeletionReplay(backupPoint, replayThrough);
+  assert.ok(entries.some((entry) => entry.subject_id === created.data.user.id), "Deletion ledger did not retain the post-backup deletion");
+  for (const entry of entries) {
+    const authDelete = await admin.auth.admin.deleteUser(entry.subject_id);
+    if (authDelete.error && !/not found/i.test(authDelete.error.message)) fail(authDelete.error, "Replay could not delete restored authentication user");
+    const replay = await admin.rpc("replay_deleted_subject", { p_user_id: entry.subject_id });
+    fail(replay.error, "Replay could not remove restored student-owned records");
+  }
+  for (const table of ["profiles", "qualifications", "portfolio_items", "evidence_items", "evidence_requirement_links", "tasks", "applications"]) {
+    const column = table === "profiles" ? "id" : "user_id";
+    assert.equal((await admin.from(table).select("*", { count: "exact", head: true }).eq(column, created.data.user.id)).count, 0, `Replay left restored ${table}`);
+  }
+  assert.equal((await admin.from("orders").select("user_id").eq("id", retainedOrderId).single()).data?.user_id, null, "Replay did not preserve retained payment anonymisation");
+  assert.equal((await admin.from("audit_events").select("user_id").eq("id", retainedAuditId).single()).data?.user_id, null, "Replay did not preserve retained audit anonymisation");
+
+  // Replaying the same batch must be a no-op, not an error or a recreation.
+  for (const entry of entries) {
+    const replay = await admin.rpc("replay_deleted_subject", { p_user_id: entry.subject_id });
+    fail(replay.error, "Deletion replay is not idempotent");
+  }
+
   console.log(JSON.stringify({
-    suite: "backup-restore", status: "blocked", source: redacted(env.sourceRef), target: redacted(env.targetRef),
-    migrationVersions: migrations, verified: ["distinct-target-sentinel", "schema-security", "auth-references", "synthetic-commercial-cycle", "export-equivalent-queries", "account-cascade", "retained-record-anonymisation", "cleanup"],
-    blocker: "deletion-ledger-replay-requires-separately-durable-ledger-and-approved-retention",
+    suite: "backup-restore", status: "passed", source: redacted(env.sourceRef), target: redacted(env.targetRef),
+    migrationVersions: migrations, verified: ["distinct-target-sentinel", "schema-security", "auth-references", "synthetic-commercial-cycle", "export-equivalent-queries", "account-cascade", "retained-record-anonymisation", "post-backup-restoration", "durable-ledger-replay", "idempotent-replay", "cleanup"],
   }));
-  throw new Error("Restore verification remains blocked: a database backup cannot contain deletion tombstones created after its backup point. Approve a separately durable deletion-ledger store and retention policy before replay can be implemented.");
 } finally {
   try {
     await cleanup();

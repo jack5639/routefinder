@@ -16,7 +16,7 @@ const issueSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const context = await getMutationApiContext();
+  const context = await getMutationApiContext(request);
   if (!context) return apiError("Sign in to report a source issue.", 401, "unauthorised");
   if (!(await consumeRateLimit(context, "source-issue-write", 10, 3600))) {
     return apiError("Too many source reports were submitted. Try again shortly.", 429, "rate-limited");
