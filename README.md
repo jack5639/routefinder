@@ -1,16 +1,14 @@
 # Routefinder
 
-Routefinder is a mobile-first application-readiness workspace for English late-Year-12 and early-Year-13 students preparing university, higher-apprenticeship, and degree-apprenticeship applications.
+Routefinder is in Phase 0 of a product reset. The active V3 mission is **give every student a personalised careers strategist**; V3 is not designed or implemented yet.
 
-The commercial direction focuses first on technology, engineering, business, and finance. It helps students compare real opportunities, understand published requirements, map their genuine evidence, see gaps and uncertainty, and complete useful actions before deadlines.
-
-Routefinder is a decision and preparation aid. It does not predict admission, replace an adviser, or write applications for students.
+The codebase currently contains the frozen V2 application-readiness product for late-Year-12 and early-Year-13 students exploring university and apprenticeship options. It remains a decision and preparation aid, not an admissions predictor, substitute for an adviser, or application-writing service.
 
 ## Repository status
 
-This repository contains the customer-ready MVP implementation for a gated founding launch targeted from 15 September 2026, with 15 October 2026 as the latest planned paid opening for the main January-deadline cohort, alongside a clearly separated compatibility demo. External infrastructure, reviewed launch catalogue content, production credentials, and specialist approvals are still release gates; the date never overrides them.
+This repository preserves the V2 implementation while creating a clean boundary for future V3 work. The V2 product, its commercial assumptions, and its launch gates are historical/legacy context; they are not the active product direction. No V3 user journey, domain model, or feature set has been implemented in this phase.
 
-Commercial MVP implementation:
+Frozen V2 application-readiness implementation:
 
 - Supabase email magic-link authentication, protected pages, Postgres migrations, RLS, audit and consent records;
 - readiness check with explicit unknown qualification states;
@@ -22,13 +20,13 @@ Commercial MVP implementation:
 - allowlisted analytics, source reporting, JSON export, explicit prototype import, and account deletion;
 - commercial landing, pricing, source-backed guides, policy baselines, separate liveness and launch-readiness checks, secure headers, redacted logging, CI, component tests, and browser-test infrastructure.
 
-Compatibility demo implementation:
+Frozen V2 compatibility demo:
 
 - browser-saved route quiz, route-family scoring, roadmaps, saved roadmap, simulator, and parent summary;
 - clearly labelled demo catalogue data and local SQLite catalogue development;
 - legacy experimental AI roadmap endpoint with a deterministic fallback.
 
-Release gates not satisfiable from source code alone:
+V2 release gates not satisfiable from source code alone:
 
 - create and configure separate London-region staging and production Supabase projects;
 - connect one Vercel project to Git, with Preview deployments isolated to staging and Production deployments isolated to production, then configure the production domain;
@@ -41,7 +39,7 @@ Release gates not satisfiable from source code alone:
 
 Before making changes, read [AGENTS.md](AGENTS.md) and the [documentation index](docs/README.md). They define required reading, sources of truth, safety constraints, and completion criteria.
 
-The final product and commercial direction is in [docs/product-decisions.md](docs/product-decisions.md).
+The active product direction is in [docs/product-direction.md](docs/product-direction.md). The V2 commercial plan is retained as an [archived record](docs/product-decisions.md), and [docs/v3-reset.md](docs/v3-reset.md) explains what can be reused versus what is legacy.
 
 ## Requirements
 
@@ -60,7 +58,7 @@ pnpm dev
 
 Open the local URL printed by Next.js, normally `http://localhost:3000`.
 
-`OPENAI_API_KEY` is optional and applies only to the legacy demo. Generative AI is not part of the commercial MVP.
+`OPENAI_API_KEY` is optional and currently applies only to the frozen V2 demo. V3 AI use has not been designed.
 
 ## Quality checks
 
@@ -130,12 +128,13 @@ Only a complete successful apprenticeship snapshot can close missing vacancies. 
 | `/roadmap` | Compatibility entry to saved or selected roadmap |
 | `/summary` | Compatibility redirect to parent summary |
 
-Do not remove compatibility routes without an explicit migration decision.
+All current routes are V2/legacy surfaces. Do not remove or extend them as V3 by default; see [docs/v3-reset.md](docs/v3-reset.md) before making a migration decision.
 
 ## Repository structure
 
 ```text
 src/app/                    Next.js pages and API route handlers
+src/v3/                     Empty boundary for future V3 product code
 src/components/             Reusable UI components
 src/data/routes/            Clearly labelled demo route families
 src/data/roadmaps/          Prototype deterministic roadmap templates

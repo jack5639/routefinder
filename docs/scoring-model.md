@@ -2,7 +2,11 @@
 
 Last reviewed: 29 July 2026
 
-Status: authoritative recommendation semantics. The repository still contains a legacy prototype total score; the commercial experience must migrate to the separate views defined here.
+Status: archived V2 recommendation semantics. The model remains authoritative only when maintaining frozen V2 behaviour; it does not define V3 recommendation semantics.
+
+## V3 reset notice
+
+V3 is not designed yet. Do not extend, import, or migrate this quiz-to-route-score model into V3 by default. Future V3 path, trade-off, strategy, and next-action concepts must be derived from user validation and the active [`product-direction.md`](product-direction.md), while retaining relevant safety constraints from [`adr/002-verified-data-and-bounded-ai.md`](adr/002-verified-data-and-bounded-ai.md).
 
 ## Purpose
 

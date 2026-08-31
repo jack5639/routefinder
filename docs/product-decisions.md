@@ -1,10 +1,16 @@
-# Routefinder Final Product and Commercial Plan
+# Routefinder V2 Product and Commercial Plan (Archived)
 
 Last updated: 27 August 2026
 
-Status: final strategic direction for a gated founding launch targeted from 15 September 2026, with 15 October 2026 as the latest planned paid opening for the main January-deadline cohort. Safety and production gates, not the calendar, authorise payment. Change the launch direction only when user evidence or commercial results contradict an assumption below.
+Status: archived V2 product and commercial direction. It is retained to preserve context for the frozen V2 implementation, not as the active Routefinder strategy.
 
-Related documentation: [`README.md`](README.md), [`architecture.md`](architecture.md), [`scoring-model.md`](scoring-model.md), and the [`adr`](adr) directory.
+Related documentation: [`product-direction.md`](product-direction.md) is the active V3 product direction; [`v3-reset.md`](v3-reset.md) defines the V2/V3 migration boundary. This archived V2 record remains related to [`README.md`](README.md), [`architecture.md`](architecture.md), [`scoring-model.md`](scoring-model.md), and the [`adr`](adr) directory.
+
+## Superseded by the V3 product reset
+
+This document records the application-readiness, university/apprenticeship comparison, evidence-gap, and commercial-launch decisions made for V2. Those decisions no longer define the active product direction.
+
+Phase 0 does not design or implement V3. Future work begins from the mission, core question, and conceptual model in [`product-direction.md`](product-direction.md), then derives V3 architecture and domain types from user validation. Preserve the safety, provenance, and privacy lessons recorded here when relevant, but do not carry V2 workflow, pricing, catalogue-coverage, scoring, or route-first assumptions into V3 automatically.
 
 ## Executive decision
 

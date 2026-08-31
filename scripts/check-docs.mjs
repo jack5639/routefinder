@@ -7,6 +7,8 @@ const requiredDocuments = [
   "AGENTS.md",
   "README.md",
   "docs/README.md",
+  "docs/product-direction.md",
+  "docs/v3-reset.md",
   "docs/architecture.md",
   "docs/product-decisions.md",
   "docs/scoring-model.md",

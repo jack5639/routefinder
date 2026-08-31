@@ -2,11 +2,17 @@
 
 Last reviewed: 27 August 2026
 
-Status: authoritative technical direction. Current sections describe the repository today; release-gate sections distinguish source-complete work from external production work.
+Status: authoritative record of the implemented V2 architecture and potentially reusable technical foundations. It does not define the V3 product architecture, which has not been designed.
+
+## V3 reset notice
+
+The repository is in Phase 0 of a product reset. The active V3 mission and its limited conceptual model are in [`product-direction.md`](product-direction.md); the V2/V3 reuse boundary is in [`v3-reset.md`](v3-reset.md).
+
+The application-readiness, opportunity portfolio, evidence mapping, and application-tracker flows described below are frozen V2 product architecture. Preserve their routes and tests, but do not use their domain boundaries, database model, or workflow as the default V3 architecture. The framework, validation, provenance, security, and source-boundary patterns may be evaluated for reuse.
 
 ## Architectural goals
 
-Routefinder must support a source-backed application-readiness workflow without allowing UI, AI, billing, or mock data to become the authority for eligibility or opportunity facts.
+The implemented V2 system supports a source-backed application-readiness workflow without allowing UI, AI, billing, or mock data to become the authority for eligibility or opportunity facts.
 
 The architecture optimises for:
 

@@ -6,9 +6,11 @@ This directory contains the durable sources of truth for Routefinder. Read `AGEN
 
 | Document | Authority | Read when |
 | --- | --- | --- |
-| [`product-decisions.md`](product-decisions.md) | Product strategy and commercial plan | Changing target users, scope, workflow, pricing, growth, metrics, data policy, AI policy, launch sequence, or priorities |
-| [`architecture.md`](architecture.md) | Current and target technical architecture | Changing pages, APIs, persistence, accounts, catalogue, AI integration, module boundaries, or environment configuration |
-| [`scoring-model.md`](scoring-model.md) | Recommendation semantics | Changing eligibility, fit, readiness, confidence, portfolio roles, ranking, feedback, simulator logic, or recommendation copy |
+| [`product-direction.md`](product-direction.md) | Active V3 product direction | Changing target users, scope, workflow, priorities, or V3 product assumptions |
+| [`v3-reset.md`](v3-reset.md) | V2/V3 migration boundary | Deciding whether existing code or infrastructure may be reused in V3 |
+| [`product-decisions.md`](product-decisions.md) | Archived V2 commercial direction | Maintaining or auditing the frozen V2 product and its former commercial decisions |
+| [`architecture.md`](architecture.md) | V2 architecture and reusable technical foundations | Changing pages, APIs, persistence, accounts, catalogue, AI integration, or module boundaries; read the V3 reset notice first |
+| [`scoring-model.md`](scoring-model.md) | Archived V2 recommendation semantics | Maintaining V2 eligibility, fit, readiness, confidence, portfolio-role, ranking, feedback, or simulator behaviour |
 | [`adr/001-local-storage-boundary.md`](adr/001-local-storage-boundary.md) | Prototype persistence decision | Changing local storage, accounts, sharing, recovery, export, deletion, or migration |
 | [`adr/002-verified-data-and-bounded-ai.md`](adr/002-verified-data-and-bounded-ai.md) | Source and AI authority decision | Changing catalogue sources, requirements, provenance, automation, AI outputs, agents, or eligibility |
 | [`adr/003-separately-durable-deletion-ledger.md`](adr/003-separately-durable-deletion-ledger.md) | Recovery deletion-replay boundary | Changing commercial account deletion, backups, restoration, or retention |
@@ -26,13 +28,14 @@ Use this order when information disagrees:
 
 1. `AGENTS.md` for working rules.
 2. An accepted ADR for the architectural decision it records.
-3. `product-decisions.md` for product and commercial direction.
+3. `product-direction.md` for active V3 product direction.
 4. `architecture.md` for intended system boundaries.
 5. `scoring-model.md` for recommendation meaning.
-6. `README.md` for current setup.
-7. Code and tests for currently implemented behaviour.
+6. `product-decisions.md` for the archived V2 commercial direction.
+7. `README.md` for current setup.
+8. Code and tests for currently implemented behaviour.
 
-Current behaviour may lag the intended plan. Mark that difference explicitly; do not rewrite strategy to match prototype limitations.
+V2 code remains implemented but is frozen. V3 is intentionally not designed yet; do not rewrite the V3 direction to match V2 limitations or copy V2 assumptions automatically.
 
 ## Documentation lifecycle
 
@@ -87,4 +90,4 @@ The check enforces required files, relative links, index coverage, retired filen
 
 ## Consolidated documents
 
-The former `mvp-spec.md`, `phase-plan.md`, `product-plan.md`, and `user-workflow.md` were removed on 29 July 2026. They described the original broad prototype and duplicated one another. Their useful implementation facts are now represented in `README.md`, `product-decisions.md`, `architecture.md`, and `scoring-model.md`.
+The former `mvp-spec.md`, `phase-plan.md`, `product-plan.md`, and `user-workflow.md` were removed on 29 July 2026. Their V2 implementation facts remain represented in `README.md`, `product-decisions.md`, `architecture.md`, and `scoring-model.md`. The active V3 direction and the V2/V3 boundary are represented separately in `product-direction.md` and `v3-reset.md`.
